@@ -125,7 +125,14 @@ void AuthManager::clear_session() {
 }
 
 bool AuthManager::needs_pin_setup() const {
+#ifdef FINCEPT_LOCAL_MODE
+    // PIN is bypassed entirely in single-user local mode. has_pin() also
+    // returns false in this build, so without this guard WindowFrame would
+    // route the user into the PIN-setup screen on every startup.
+    return false;
+#else
     return session_.authenticated && !PinManager::instance().has_pin();
+#endif
 }
 
 // ── Initialize ───────────────────────────────────────────────────────────────
@@ -529,10 +536,17 @@ void AuthManager::attempt_session_recovery(std::function<void(bool)> cb) {
 // ── Refresh user data ────────────────────────────────────────────────────────
 
 void AuthManager::refresh_user_data() {
+#ifdef FINCEPT_LOCAL_MODE
+    // No upstream profile/subscription endpoint to refresh from. The synthetic
+    // ENTERPRISE session never expires; reaching api.fincept.in would just
+    // 401-clear the session and bounce the user back through PIN setup.
+    return;
+#else
     if (!session_.authenticated || session_.api_key.isEmpty())
         return;
     // fetch_user_profile chains into fetch_user_subscription automatically
     fetch_user_profile([this] { emit subscription_fetched(); });
+#endif
 }
 
 // ── Auto-configure Fincept LLM provider ──────────────────────────────────────

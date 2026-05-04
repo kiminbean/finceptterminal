@@ -238,6 +238,20 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
                                                        .arg(exchange_id_, channel, symbol, err));
                          });
 
+#ifdef FINCEPT_LOCAL_MODE
+        // LOCAL_MODE: keep Kraken WS on the main thread. The dedicated I/O
+        // thread design has been observed to crash with EXC_BAD_ACCESS in
+        // QSocketNotifier::setEnabled when QWebSocket's underlying TCP socket
+        // changes state from the main thread (heartbeat reset, periodic
+        // refresh, set_primary_symbol, etc.) while the event dispatcher is
+        // active on the worker. Running everything on the main thread is
+        // slower under heavy throughput but eliminates the cross-thread race.
+        kraken_ws_thread_ = nullptr;
+        kraken_ws_->start(primary_symbol, all_symbols);
+        LOG_INFO(kSessionTag, QString("Native Kraken WS started (primary=%1, %2 symbols, "
+                                       "main-thread mode)")
+                                  .arg(primary_symbol).arg(all_symbols.size()));
+#else
         // Spin up the worker thread but DON'T move the client yet — we need
         // to run the symbol resolver (which calls PythonRunner::run, only safe
         // on the thread that owns PythonRunner — main). Once resolve completes,
@@ -255,6 +269,7 @@ bool ExchangeSession::start_ws(const QString& primary_symbol, const QStringList&
         LOG_INFO(kSessionTag, QString("Native Kraken WS started (primary=%1, %2 symbols, "
                                        "I/O thread=KrakenWsIO)")
                                   .arg(primary_symbol).arg(all_symbols.size()));
+#endif
         return true;
     }
 
