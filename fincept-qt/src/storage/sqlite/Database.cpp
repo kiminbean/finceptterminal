@@ -38,6 +38,10 @@ bool Database::is_open() const {
 
 Result<QSqlQuery> Database::execute(const QString& sql, const QVariantList& params) {
     QSqlQuery query(db_);
+    // Forward-only result sets: SQLite driver skips building the random-
+    // access buffer. Repositories iterate via while(q.next()) — never seek
+    // backwards or call size() — so this is a pure win across all reads.
+    query.setForwardOnly(true);
     query.prepare(sql);
     for (int i = 0; i < params.size(); ++i) {
         query.bindValue(i, params[i]);

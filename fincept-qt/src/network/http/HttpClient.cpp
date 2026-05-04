@@ -156,14 +156,16 @@ void HttpClient::get(const QString& url, JsonCallback callback) {
 void HttpClient::post(const QString& url, const QJsonObject& body, JsonCallback callback) {
     LOG_DEBUG("HTTP", "POST " + url);
     QJsonDocument doc(body);
-    auto* reply = nam_->post(build_request(url), doc.toJson());
+    // Compact: ~50% smaller payloads vs the indented default. Smaller body =
+    // less to encode, less to send, less to gzip on the server side.
+    auto* reply = nam_->post(build_request(url), doc.toJson(QJsonDocument::Compact));
     handle_reply(reply, std::move(callback));
 }
 
 void HttpClient::put(const QString& url, const QJsonObject& body, JsonCallback callback) {
     LOG_DEBUG("HTTP", "PUT " + url);
     QJsonDocument doc(body);
-    auto* reply = nam_->put(build_request(url), doc.toJson());
+    auto* reply = nam_->put(build_request(url), doc.toJson(QJsonDocument::Compact));
     handle_reply(reply, std::move(callback));
 }
 

@@ -51,6 +51,10 @@ bool CacheDatabase::is_open() const {
 Result<QSqlQuery> CacheDatabase::execute(const QString& sql, const QVariantList& params) {
     QMutexLocker lock(&mutex_);
     QSqlQuery query(db_);
+    // setForwardOnly(true) tells the SQLite driver to skip building a random-
+    // access result-set buffer. We only ever iterate forward via next(), so
+    // this is a pure win — less memory, less copying, faster row fetch.
+    query.setForwardOnly(true);
     query.prepare(sql);
     for (int i = 0; i < params.size(); ++i) {
         query.bindValue(i, params[i]);

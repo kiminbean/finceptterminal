@@ -289,12 +289,19 @@ struct PasswordStrength {
 };
 
 inline PasswordStrength validate_password(const QString& pw) {
+    // Compiled once on first call. validate_password runs on every keystroke
+    // in password fields — recompiling 5 regexes per character is wasteful.
+    static const QRegularExpression re_upper("[A-Z]");
+    static const QRegularExpression re_lower("[a-z]");
+    static const QRegularExpression re_number("[0-9]");
+    static const QRegularExpression re_special("[!@#$%^&*(),.?\":{}|<>]");
+
     PasswordStrength r;
     r.min_length = pw.length() >= 8;
-    r.has_upper = pw.contains(QRegularExpression("[A-Z]"));
-    r.has_lower = pw.contains(QRegularExpression("[a-z]"));
-    r.has_number = pw.contains(QRegularExpression("[0-9]"));
-    r.has_special = pw.contains(QRegularExpression("[!@#$%^&*(),.?\":{}|<>]"));
+    r.has_upper = pw.contains(re_upper);
+    r.has_lower = pw.contains(re_lower);
+    r.has_number = pw.contains(re_number);
+    r.has_special = pw.contains(re_special);
     r.score = (int)r.min_length + (int)r.has_upper + (int)r.has_lower + (int)r.has_number + (int)r.has_special;
     r.valid = r.min_length && r.has_upper && r.has_lower && r.has_number;
     return r;
@@ -302,8 +309,9 @@ inline PasswordStrength validate_password(const QString& pw) {
 
 /// Sanitize user input — strip leading/trailing whitespace, remove control chars.
 inline QString sanitize_input(const QString& input) {
+    static const QRegularExpression re_control("[\\x00-\\x1F\\x7F]");
     QString s = input.trimmed();
-    s.remove(QRegularExpression("[\\x00-\\x1F\\x7F]"));
+    s.remove(re_control);
     return s;
 }
 

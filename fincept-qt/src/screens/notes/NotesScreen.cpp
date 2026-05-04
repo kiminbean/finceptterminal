@@ -532,7 +532,8 @@ void NotesScreen::on_save_note() {
     note.sentiment = edit_sentiment_->currentText();
     note.tags = edit_tags_->text().trimmed();
     note.tickers = edit_tickers_->text().trimmed().toUpper();
-    note.word_count = note.content.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).size();
+    static const QRegularExpression ws_re("\\s+");
+    note.word_count = note.content.split(ws_re, Qt::SkipEmptyParts).size();
 
     auto& repo = fincept::NotesRepository::instance();
 

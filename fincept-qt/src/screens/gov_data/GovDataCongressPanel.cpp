@@ -320,13 +320,17 @@ void GovDataCongressPanel::populate_bill_detail(const QJsonObject& json) {
         md += "**Status:** " + bill["latestAction"].toObject()["text"].toString() + "\n\n";
     }
 
+    static const QRegularExpression md_h1("^# (.+)$", QRegularExpression::MultilineOption);
+    static const QRegularExpression md_h2("^## (.+)$", QRegularExpression::MultilineOption);
+    static const QRegularExpression md_bold("\\*\\*(.+?)\\*\\*");
+
     QString html = md;
     html.replace("\n\n", "<br><br>");
-    html.replace(QRegularExpression("^# (.+)$", QRegularExpression::MultilineOption),
+    html.replace(md_h1,
                  "<h2 style='color:" + kGovDataCongressColor + ";font-weight:700;'>\\1</h2>");
-    html.replace(QRegularExpression("^## (.+)$", QRegularExpression::MultilineOption),
+    html.replace(md_h2,
                  "<h3 style='color:" + kGovDataCongressColor + ";'>\\1</h3>");
-    html.replace(QRegularExpression("\\*\\*(.+?)\\*\\*"), "<b>\\1</b>");
+    html.replace(md_bold, "<b>\\1</b>");
 
     const auto& tk = ThemeManager::instance().tokens();
     detail_browser_->setHtml(QString("<html><body style='background:%1; color:%2; font-family:%3,monospace;"

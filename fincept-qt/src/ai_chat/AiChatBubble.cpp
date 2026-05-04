@@ -727,9 +727,11 @@ void AiChatBubble::speak_text(const QString& text) {
         return;
 
     // Strip markdown for TTS — engines speak raw text.
+    static const QRegularExpression re_md_inline(R"(\*\*|__|~~|```[^`]*```|`[^`]*`)");
+    static const QRegularExpression re_md_heading(R"(#{1,6} )");
     QString clean = text;
-    clean.remove(QRegularExpression(R"(\*\*|__|~~|```[^`]*```|`[^`]*`)"));
-    clean.remove(QRegularExpression(R"(#{1,6} )"));
+    clean.remove(re_md_inline);
+    clean.remove(re_md_heading);
     clean = clean.trimmed();
 
     if (clean.isEmpty()) {

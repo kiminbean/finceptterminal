@@ -71,6 +71,10 @@ void DatabentoService::set_api_key(const QString& key) {
     QString trimmed = key.trimmed();
     SecureStorage::instance().store(SECURE_KEY, trimmed);
     SecureStorage::instance().store(DATABENTO_ENV_KEY, trimmed);
+    // DATABENTO_API_KEY is in PythonRunner's managed-credential allowlist, so the
+    // cached env carries its value. Drop the cache so the next Python spawn sees
+    // the new key without waiting up to the TTL.
+    PythonRunner::instance().invalidate_env_cache();
     LOG_INFO("Databento", "API key stored");
 }
 
@@ -85,6 +89,7 @@ QString DatabentoService::api_key() const {
 void DatabentoService::clear_api_key() {
     SecureStorage::instance().remove(SECURE_KEY);
     SecureStorage::instance().remove(DATABENTO_ENV_KEY);
+    PythonRunner::instance().invalidate_env_cache();
 }
 
 // ── Core runner — wraps PythonRunner per P4 ────────────────────────────────

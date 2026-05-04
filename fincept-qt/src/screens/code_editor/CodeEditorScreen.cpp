@@ -635,15 +635,22 @@ void CellWidget::render_markdown() {
         }
 
         // Inline formatting: **bold**, *italic*, `code`, [link](url)
+        // Patterns compiled once on first iteration; the markdown render runs
+        // line-by-line inside this loop and prior code recompiled all four
+        // regexes per line.
+        static const QRegularExpression md_code("`([^`]+)`");
+        static const QRegularExpression md_bold("\\*\\*([^*]+)\\*\\*");
+        static const QRegularExpression md_italic("\\*([^*]+)\\*");
+        static const QRegularExpression md_link("\\[([^\\]]+)\\]\\(([^)]+)\\)");
         QString escaped = line.toHtmlEscaped();
         // Inline code first (to avoid nested processing)
-        escaped.replace(QRegularExpression("`([^`]+)`"), "<code>\\1</code>");
+        escaped.replace(md_code, "<code>\\1</code>");
         // Bold
-        escaped.replace(QRegularExpression("\\*\\*([^*]+)\\*\\*"), "<strong>\\1</strong>");
+        escaped.replace(md_bold, "<strong>\\1</strong>");
         // Italic
-        escaped.replace(QRegularExpression("\\*([^*]+)\\*"), "<em>\\1</em>");
+        escaped.replace(md_italic, "<em>\\1</em>");
         // Links
-        escaped.replace(QRegularExpression("\\[([^\\]]+)\\]\\(([^)]+)\\)"), "<a href='\\2'>\\1</a>");
+        escaped.replace(md_link, "<a href='\\2'>\\1</a>");
 
         html += "<p style='margin:2px 0;'>" + escaped + "</p>";
     }

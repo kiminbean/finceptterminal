@@ -89,8 +89,9 @@ static InstrumentType map_angel_type(const QString& raw_type, const QString& sym
 }
 
 static QString normalise_spot_symbol(const QString& symbol) {
+    static const QRegularExpression suffix_re("(-EQ|-BE|-MF|-SG)$");
     QString s = symbol.toUpper();
-    s.replace(QRegularExpression("(-EQ|-BE|-MF|-SG)$"), "");
+    s.replace(suffix_re, "");
     return s;
 }
 

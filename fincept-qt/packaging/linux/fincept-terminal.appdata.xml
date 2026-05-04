@@ -28,6 +28,19 @@
     <binary>FinceptTerminal</binary>
   </provides>
   <releases>
+    <release version="4.0.3" date="2026-05-04">
+      <description>
+        <p>Version 4.0.3 — Performance and security release.</p>
+        <ul>
+          <li>In-memory hot tier for the SQLite cache; forward-only result sets across both databases.</li>
+          <li>Compact JSON request bodies; HTTP request deduplication tightened.</li>
+          <li>DataTable bulk loads pause sorting; chart data is downsampled with LTTB.</li>
+          <li>Python subprocess env cached and invalidated on credential rotation.</li>
+          <li>Hot-path regex objects compiled once instead of per call.</li>
+          <li>Security: cached credentials are flushed immediately when keys are rotated or removed.</li>
+        </ul>
+      </description>
+    </release>
     <release version="4.0.2" date="2026-04-14">
       <description>
         <p>Version 4.0.2 — Patch release.</p>

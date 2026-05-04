@@ -435,42 +435,47 @@ ApiResponse<QVector<BrokerCandle>> ZerodhaBroker::get_history(const BrokerCreden
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Stub implementations for remaining Indian brokers — auth_headers is unique per broker,
-// all other methods return "not implemented" and will be filled as needed.
+// all other methods return a structured "not implemented" response so the UI
+// can surface "<Broker>: <operation> not implemented" instead of bare "TODO".
+// Each stub will be replaced with the real REST/WebSocket call as the broker
+// integration ships.
+
+#define STUB_NOT_IMPL_MSG(OP) QString("%1: %2 not implemented").arg(name(), QStringLiteral(#OP))
 
 #define IMPL_STUB_METHODS(CLASS)                                                                                       \
     TokenExchangeResponse CLASS::exchange_token(const QString&, const QString&, const QString&) {                      \
-        return {false, "", "", "", "Use OAuth flow"};                                                                  \
+        return {false, "", "", "", QString("%1: use OAuth flow").arg(name())};                                         \
     }                                                                                                                  \
     OrderPlaceResponse CLASS::place_order(const BrokerCredentials&, const UnifiedOrder&) {                             \
-        return {false, "", QString("%1: TODO").arg(name())};                                                           \
+        return {false, "", STUB_NOT_IMPL_MSG(place_order)};                                                            \
     }                                                                                                                  \
     ApiResponse<QJsonObject> CLASS::modify_order(const BrokerCredentials&, const QString&, const QJsonObject&) {       \
-        return {false, std::nullopt, "TODO", now_ts()};                                                                \
+        return {false, std::nullopt, STUB_NOT_IMPL_MSG(modify_order), now_ts()};                                       \
     }                                                                                                                  \
     ApiResponse<QJsonObject> CLASS::cancel_order(const BrokerCredentials&, const QString&) {                           \
-        return {false, std::nullopt, "TODO", now_ts()};                                                                \
+        return {false, std::nullopt, STUB_NOT_IMPL_MSG(cancel_order), now_ts()};                                       \
     }                                                                                                                  \
     ApiResponse<QVector<BrokerOrderInfo>> CLASS::get_orders(const BrokerCredentials&) {                                \
-        return {false, std::nullopt, "TODO", now_ts()};                                                                \
+        return {false, std::nullopt, STUB_NOT_IMPL_MSG(get_orders), now_ts()};                                         \
     }                                                                                                                  \
     ApiResponse<QJsonObject> CLASS::get_trade_book(const BrokerCredentials&) {                                         \
-        return {false, std::nullopt, "TODO", now_ts()};                                                                \
+        return {false, std::nullopt, STUB_NOT_IMPL_MSG(get_trade_book), now_ts()};                                     \
     }                                                                                                                  \
     ApiResponse<QVector<BrokerPosition>> CLASS::get_positions(const BrokerCredentials&) {                              \
-        return {false, std::nullopt, "TODO", now_ts()};                                                                \
+        return {false, std::nullopt, STUB_NOT_IMPL_MSG(get_positions), now_ts()};                                      \
     }                                                                                                                  \
     ApiResponse<QVector<BrokerHolding>> CLASS::get_holdings(const BrokerCredentials&) {                                \
-        return {false, std::nullopt, "TODO", now_ts()};                                                                \
+        return {false, std::nullopt, STUB_NOT_IMPL_MSG(get_holdings), now_ts()};                                       \
     }                                                                                                                  \
     ApiResponse<BrokerFunds> CLASS::get_funds(const BrokerCredentials&) {                                              \
-        return {false, std::nullopt, "TODO", now_ts()};                                                                \
+        return {false, std::nullopt, STUB_NOT_IMPL_MSG(get_funds), now_ts()};                                          \
     }                                                                                                                  \
     ApiResponse<QVector<BrokerQuote>> CLASS::get_quotes(const BrokerCredentials&, const QVector<QString>&) {           \
-        return {false, std::nullopt, "TODO", now_ts()};                                                                \
+        return {false, std::nullopt, STUB_NOT_IMPL_MSG(get_quotes), now_ts()};                                         \
     }                                                                                                                  \
     ApiResponse<QVector<BrokerCandle>> CLASS::get_history(const BrokerCredentials&, const QString&, const QString&,    \
                                                           const QString&, const QString&) {                            \
-        return {false, std::nullopt, "TODO", now_ts()};                                                                \
+        return {false, std::nullopt, STUB_NOT_IMPL_MSG(get_history), now_ts()};                                        \
     }
 
 // ── Upstox ──

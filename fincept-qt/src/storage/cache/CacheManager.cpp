@@ -2,6 +2,8 @@
 
 #include "storage/sqlite/CacheDatabase.h"
 
+#include <QDateTime>
+#include <QMutexLocker>
 #include <QSqlQuery>
 #include <utility>
 
@@ -28,6 +30,60 @@ CacheManager& CacheManager::instance() {
 
 CacheManager::CacheManager(QObject* parent) : QObject(parent) {}
 
+bool CacheManager::mem_lookup(const QString& key, QString& out) const {
+    QMutexLocker lock(&mem_mutex_);
+    auto* entry = mem_cache_.object(key);
+    if (!entry)
+        return false;
+    if (entry->expires_at_ms > 0 && QDateTime::currentMSecsSinceEpoch() >= entry->expires_at_ms) {
+        mem_cache_.remove(key);
+        return false;
+    }
+    out = entry->value;
+    return true;
+}
+
+quint64 CacheManager::mem_generation() const {
+    QMutexLocker lock(&mem_mutex_);
+    return invalidation_gen_;
+}
+
+void CacheManager::mem_store_if_unchanged(const QString& key, const QString& value, int ttl_seconds,
+                                          quint64 gen_seen) const {
+    QMutexLocker lock(&mem_mutex_);
+    // If any remove*/clear* fired between gen_seen capture and now, a deleted
+    // key may have just been read from SQL — refuse to repopulate to avoid
+    // resurrecting it for the duration of its TTL.
+    if (invalidation_gen_ != gen_seen)
+        return;
+    auto* e = new MemoryEntry{value, ttl_seconds > 0
+                                         ? QDateTime::currentMSecsSinceEpoch() + qint64(ttl_seconds) * 1000
+                                         : 0};
+    mem_cache_.insert(key, e);
+}
+
+void CacheManager::mem_remove(const QString& key) {
+    QMutexLocker lock(&mem_mutex_);
+    ++invalidation_gen_;
+    mem_cache_.remove(key);
+}
+
+void CacheManager::mem_clear() {
+    QMutexLocker lock(&mem_mutex_);
+    ++invalidation_gen_;
+    mem_cache_.clear();
+}
+
+void CacheManager::mem_remove_prefix(const QString& prefix) {
+    QMutexLocker lock(&mem_mutex_);
+    ++invalidation_gen_;
+    const auto keys = mem_cache_.keys();
+    for (const QString& k : keys) {
+        if (k.startsWith(prefix))
+            mem_cache_.remove(k);
+    }
+}
+
 void CacheManager::put(const QString& key, const QVariant& value, int ttl_seconds, const QString& category) {
     if (key.isEmpty())
         return;
@@ -49,16 +105,37 @@ void CacheManager::put(const QString& key, const QVariant& value, int ttl_second
                 "  expires_at=excluded.expires_at, "
                 "  size_bytes=excluded.size_bytes",
                 {key, data, category, ttl_seconds, ttl_seconds, size_bytes});
+
+    // Refresh the in-memory tier so subsequent reads are served without a SQL
+    // roundtrip. Using the gen-checked variant means a concurrent remove*
+    // of any key will cause this store to be skipped — the next get() will
+    // simply repopulate from SQL. That's strictly safer than caching the
+    // put's value over a possibly-deleted row.
+    mem_store_if_unchanged(key, data, ttl_seconds, mem_generation());
 }
 
 QVariant CacheManager::get(const QString& key) const {
     if (key.isEmpty())
         return {};
+
+    // Hot path: serve from memory if present and unexpired.
+    QString cached;
+    if (mem_lookup(key, cached))
+        return cached;
+
+    // Capture generation before the SQL fetch — if a concurrent remove()
+    // bumps the counter while we read, we'll refuse to repopulate the
+    // memory tier with what may be a just-deleted entry.
+    const quint64 gen_seen = mem_generation();
+
     auto& cdb = CacheDatabase::instance();
     if (!cdb.is_open())
         return {};
 
-    auto r = cdb.execute("SELECT value FROM unified_cache WHERE key = ? AND expires_at > datetime('now')", {key});
+    auto r = cdb.execute(
+        "SELECT value, CAST((julianday(expires_at) - julianday('now')) * 86400 AS INTEGER) "
+        "FROM unified_cache WHERE key = ? AND expires_at > datetime('now')",
+        {key});
     if (r.is_err())
         return {};
 
@@ -66,7 +143,11 @@ QVariant CacheManager::get(const QString& key) const {
     if (!q.next())
         return {};
 
-    return q.value(0).toString();
+    const QString value = q.value(0).toString();
+    const int remaining_seconds = q.value(1).toInt();
+    if (remaining_seconds > 0)
+        mem_store_if_unchanged(key, value, remaining_seconds, gen_seen);
+    return value;
 }
 
 std::optional<QString> CacheManager::try_get(const QString& key) const {
@@ -79,6 +160,10 @@ std::optional<QString> CacheManager::try_get(const QString& key) const {
 bool CacheManager::has(const QString& key) const {
     if (key.isEmpty())
         return false;
+    QString cached;
+    if (mem_lookup(key, cached))
+        return true;
+
     auto& cdb = CacheDatabase::instance();
     if (!cdb.is_open())
         return false;
@@ -94,6 +179,7 @@ bool CacheManager::has(const QString& key) const {
 void CacheManager::remove(const QString& key) {
     if (key.isEmpty())
         return;
+    mem_remove(key);
     auto& cdb = CacheDatabase::instance();
     if (cdb.is_open())
         cdb.execute("DELETE FROM unified_cache WHERE key = ?", {key});
@@ -103,12 +189,14 @@ void CacheManager::remove_prefix(const QString& prefix) {
     // Empty prefix would match everything — refuse to accidentally DELETE FROM unified_cache.
     if (prefix.isEmpty())
         return;
+    mem_remove_prefix(prefix);
     auto& cdb = CacheDatabase::instance();
     if (cdb.is_open())
         cdb.execute("DELETE FROM unified_cache WHERE key LIKE ? ESCAPE '\\'", {escape_like(prefix) + "%"});
 }
 
 void CacheManager::clear() {
+    mem_clear();
     auto& cdb = CacheDatabase::instance();
     if (cdb.is_open())
         cdb.exec("DELETE FROM unified_cache");
@@ -117,6 +205,9 @@ void CacheManager::clear() {
 void CacheManager::clear_category(const QString& category) {
     if (category.isEmpty())
         return;
+    // We don't track category in the memory tier — clear it conservatively to
+    // avoid serving stale entries from a deleted category.
+    mem_clear();
     auto& cdb = CacheDatabase::instance();
     if (cdb.is_open())
         cdb.execute("DELETE FROM unified_cache WHERE category = ?", {category});

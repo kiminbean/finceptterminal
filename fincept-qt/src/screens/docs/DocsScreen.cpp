@@ -221,7 +221,7 @@ QWidget* DocsScreen::page_welcome() {
     vl->setSpacing(12);
 
     vl->addWidget(make_heading("FINCEPT TERMINAL  —  DOCUMENTATION"));
-    vl->addWidget(make_muted_label("v4.0.0  |  Native C++ Financial Intelligence Terminal"));
+    vl->addWidget(make_muted_label("v4.0.3  |  Native C++ Financial Intelligence Terminal"));
 
     auto* sep = new QFrame;
     sep->setFrameShape(QFrame::HLine);
@@ -1553,7 +1553,7 @@ DocsScreen::DocsScreen(QWidget* parent) : QWidget(parent) {
                            .arg(ui::colors::BORDER_BRIGHT()));
     cmd_hl->addWidget(sep);
 
-    breadcrumb_ = new QLabel("FINCEPT TERMINAL v4.0.0");
+    breadcrumb_ = new QLabel("FINCEPT TERMINAL v4.0.3");
     breadcrumb_->setStyleSheet(QString("color: %1; font-size: 11px; font-weight: bold;"
                                        " background: transparent; letter-spacing: 0.5px;"
                                        " font-family: 'Consolas','Courier New',monospace;")
