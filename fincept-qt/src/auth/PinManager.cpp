@@ -226,7 +226,14 @@ void PinManager::load_lockout_state() {
 // ── Public API ──────────────────────────────────────────────────────────────
 
 bool PinManager::has_pin() const {
+#ifdef FINCEPT_LOCAL_MODE
+    // Local single-user mode bypasses all auth gates. Reporting "no PIN"
+    // makes WindowFrame skip the PIN unlock screen and InactivityGuard's
+    // auto-lock has nothing to lock against.
+    return false;
+#else
     return has_pin_;
+#endif
 }
 
 Result<void> PinManager::set_pin(const QString& pin) {

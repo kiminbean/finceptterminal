@@ -28,6 +28,16 @@ InactivityGuard::InactivityGuard() : QObject(nullptr) {
 }
 
 void InactivityGuard::set_enabled(bool enabled) {
+#ifdef FINCEPT_LOCAL_MODE
+    // Local single-user mode: no auto-lock. Treat every enable request as a
+    // disable so accidental Settings toggles or auth-flow defaults never lock
+    // the terminal during the user's solo session.
+    enabled_ = false;
+    timer_->stop();
+    if (enabled)
+        LOG_INFO("Auth", "Inactivity guard request ignored (FINCEPT_LOCAL_MODE)");
+    return;
+#else
     enabled_ = enabled;
     if (enabled) {
         timer_->start();
@@ -36,6 +46,7 @@ void InactivityGuard::set_enabled(bool enabled) {
         timer_->stop();
         LOG_INFO("Auth", "Inactivity guard disabled");
     }
+#endif
 }
 
 void InactivityGuard::set_timeout_minutes(int minutes) {
