@@ -87,6 +87,8 @@ void DataTable::set_cell_color(int row, int col, const QString& color) {
 
 } // namespace fincept::ui
 
+namespace fincept::ui {
+
 QTableWidgetItem* DataTable::take_from_pool(const QString& text, const QColor& fg) {
     QTableWidgetItem* item;
     if (!item_pool_.isEmpty()) {
@@ -115,3 +117,5 @@ void DataTable::return_to_pool(int old_row_count) {
         delete item_pool_.takeLast();
     }
 }
+
+} // namespace fincept::ui
