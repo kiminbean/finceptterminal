@@ -2001,6 +2001,60 @@ if(APPLE AND DEPLOY_QT)
                 "$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/PlugIns/sqldrivers/libqsqlmimer.dylib"
             COMMENT "Removing unused SQL driver plugins (ODBC/PostgreSQL/Mimer)..."
         )
+
+        # macdeployqt does NOT copy non-Qt dylibs. The main binary and Qt's
+        # OpenSSL TLS plugin (libqopensslbackend.dylib) link against
+        # @executable_path/../Frameworks/libssl.3.dylib and libcrypto.3.dylib —
+        # those must be supplied by us, otherwise HTTPS calls fail at TLS init
+        # with status=0 ("Network error" in user-facing strings). See
+        # docs/MACOS_PACKAGING.md for details.
+        find_program(OPENSSL_BREW_BIN brew)
+        set(_FINCEPT_OPENSSL_LIB "/opt/homebrew/opt/openssl@3/lib")
+        if(NOT EXISTS "${_FINCEPT_OPENSSL_LIB}/libssl.3.dylib")
+            # Fall back to brew --prefix if available
+            if(OPENSSL_BREW_BIN)
+                execute_process(COMMAND "${OPENSSL_BREW_BIN}" --prefix openssl@3
+                                OUTPUT_VARIABLE _BREW_PREFIX
+                                OUTPUT_STRIP_TRAILING_WHITESPACE)
+                if(_BREW_PREFIX)
+                    set(_FINCEPT_OPENSSL_LIB "${_BREW_PREFIX}/lib")
+                endif()
+            endif()
+        endif()
+        if(EXISTS "${_FINCEPT_OPENSSL_LIB}/libssl.3.dylib"
+           AND EXISTS "${_FINCEPT_OPENSSL_LIB}/libcrypto.3.dylib")
+            add_custom_command(TARGET FinceptTerminal POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy
+                    "${_FINCEPT_OPENSSL_LIB}/libssl.3.dylib"
+                    "$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/Frameworks/libssl.3.dylib"
+                COMMAND ${CMAKE_COMMAND} -E copy
+                    "${_FINCEPT_OPENSSL_LIB}/libcrypto.3.dylib"
+                    "$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/Frameworks/libcrypto.3.dylib"
+                COMMAND chmod u+w
+                    "$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/Frameworks/libssl.3.dylib"
+                    "$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/Frameworks/libcrypto.3.dylib"
+                COMMAND install_name_tool -id "@executable_path/../Frameworks/libssl.3.dylib"
+                    "$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/Frameworks/libssl.3.dylib"
+                COMMAND install_name_tool -id "@executable_path/../Frameworks/libcrypto.3.dylib"
+                    "$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/Frameworks/libcrypto.3.dylib"
+                # libssl ships with an absolute reference to libcrypto — rewrite it.
+                COMMAND bash -c "OLD=$(otool -L \"$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/Frameworks/libssl.3.dylib\" | awk '/libcrypto/ && !/@executable_path/ {print $1; exit}'); [ -n \"$OLD\" ] && install_name_tool -change \"$OLD\" \"@executable_path/../Frameworks/libcrypto.3.dylib\" \"$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/Frameworks/libssl.3.dylib\" || true"
+                COMMAND codesign --force --sign - --timestamp=none
+                    "$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/Frameworks/libssl.3.dylib"
+                COMMAND codesign --force --sign - --timestamp=none
+                    "$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/Frameworks/libcrypto.3.dylib"
+                COMMAND codesign --force --sign - --timestamp=none
+                    "$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/MacOS/FinceptTerminal"
+                COMMAND codesign --force --sign - --deep --timestamp=none
+                    "$<TARGET_BUNDLE_DIR:FinceptTerminal>"
+                COMMENT "Bundling OpenSSL (libssl/libcrypto) and re-signing app..."
+                VERBATIM
+            )
+        else()
+            message(WARNING "OpenSSL@3 not found at ${_FINCEPT_OPENSSL_LIB} — "
+                            "HTTPS calls will fail at runtime. Install via "
+                            "`brew install openssl@3` and rebuild.")
+        endif()
     else()
         message(WARNING "macdeployqt not found — Qt frameworks will not be bundled. "
                         "Pass -DCMAKE_PREFIX_PATH=<Qt install dir> to help CMake find it.")

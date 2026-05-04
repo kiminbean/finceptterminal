@@ -170,3 +170,8 @@ fincept-qt/docs/CRYPTO_WALLET_CONNECT.md
 
 # Claude Code / OMC local state
 .omc/
+
+# Claude Code project state
+.claude/
+# Stray base64-named files (created by some tool/hook by accident)
+kZ05zXcgg+q2Qm8FprzLnQ==

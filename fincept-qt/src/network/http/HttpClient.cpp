@@ -51,8 +51,10 @@ QNetworkRequest HttpClient::build_request(const QString& url) const {
     QNetworkRequest req{qurl};
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     req.setHeader(QNetworkRequest::UserAgentHeader, "FinceptTerminal/4.0");
-    // Request compressed responses to reduce bandwidth
-    req.setRawHeader("Accept-Encoding", "gzip, deflate");
+    // Do NOT set Accept-Encoding manually: when set explicitly, QNetworkAccessManager
+    // disables automatic decompression and hands the caller raw gzip/deflate bytes,
+    // which then fail JSON parsing and surface as "Network error" upstream.
+    // Leaving this unset lets Qt advertise + transparently decode the response.
 
     // Only attach Fincept auth headers when the request targets the configured
     // Fincept API host. Notification providers (Slack, Discord, Telegram,
