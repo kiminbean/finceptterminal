@@ -23,7 +23,21 @@ if(WIN32 AND CMAKE_HOST_WIN32)
     endif()
 endif()
 
-project(FinceptTerminal VERSION 4.0.3 LANGUAGES C CXX)
+project(FinceptTerminal VERSION 5.0.0 LANGUAGES C CXX)
+
+# ── Local-only mode (bypass api.fincept.in auth + synthetic ENTERPRISE) ──────
+# Enable with:  cmake -B build/macos-release -DFINCEPT_LOCAL_MODE=ON ...
+# When ON:
+#   - Login/Register/Pricing screens are skipped at startup
+#   - A synthetic ENTERPRISE session is injected (unlimited credits)
+#   - Fincept LLM seed is replaced by Z.AI Coding Plan (GLM-4.6)
+#   - api/base_url defaults to http://localhost:0 (set FINCEPT_API_BASE_URL env
+#     var or update Settings to point at your self-hosted Fincept server)
+# See fincept-qt/docs/LOCAL_MODE.md for full details.
+option(FINCEPT_LOCAL_MODE "Enable local-only single-user mode" OFF)
+if(FINCEPT_LOCAL_MODE)
+    message(STATUS "FINCEPT_LOCAL_MODE: ON — synthetic ENTERPRISE session, no api.fincept.in calls")
+endif()
 
 # Strip C/C++ flags out of RC invocations — rc.exe only understands /D, /I, /fo.
 if(WIN32)
@@ -2256,6 +2270,11 @@ target_link_libraries(FinceptTerminal PRIVATE
 # macOS: link Security.framework + CoreFoundation for SecItem API in SecureStorage
 if(APPLE)
     target_link_libraries(FinceptTerminal PRIVATE "-framework Security" "-framework CoreFoundation")
+endif()
+
+# Propagate FINCEPT_LOCAL_MODE flag to C++ sources via preprocessor definition.
+if(FINCEPT_LOCAL_MODE)
+    target_compile_definitions(FinceptTerminal PRIVATE FINCEPT_LOCAL_MODE=1)
 endif()
 
 # Linux: optionally link libsecret for cryptographically-secure credential

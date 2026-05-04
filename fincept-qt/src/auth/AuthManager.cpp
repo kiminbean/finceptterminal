@@ -130,8 +130,48 @@ bool AuthManager::needs_pin_setup() const {
 
 // ── Initialize ───────────────────────────────────────────────────────────────
 
+#ifdef FINCEPT_LOCAL_MODE
+// Synthesize an unlimited ENTERPRISE session — used in single-user local builds
+// to bypass the api.fincept.in auth/credit/subscription pipeline entirely.
+// No network calls are made and no credentials are persisted to disk.
+static void bootstrap_local_enterprise(SessionData& s) {
+    s.authenticated = true;
+    s.api_key = "local-enterprise-key";
+    s.session_token = "local-session";
+    s.device_id = "local-device";
+    s.has_subscription = true;
+
+    s.user_info.id = 1;
+    s.user_info.username = "local_admin";
+    s.user_info.email = "local@fincept.local";
+    s.user_info.account_type = "enterprise";
+    s.user_info.credit_balance = 1.0e9;
+    s.user_info.is_verified = true;
+    s.user_info.mfa_enabled = false;
+
+    s.subscription.account_type = "enterprise";
+    s.subscription.credit_balance = 1.0e9;
+    s.subscription.support_type = "fincept";
+}
+#endif
+
 void AuthManager::initialize() {
     set_loading(true);
+
+#ifdef FINCEPT_LOCAL_MODE
+    // Local single-user mode: skip load_session() entirely so we never touch
+    // the macOS Keychain (SecItemCopyMatching can block the main thread on a
+    // permission prompt). Install synthetic ENTERPRISE session + emit signals
+    // so the shell skips the login stack and lands on the dashboard.
+    LOG_INFO("Auth", "FINCEPT_LOCAL_MODE active — using synthetic ENTERPRISE session");
+    bootstrap_local_enterprise(session_);
+    set_loading(false);
+    emit auth_state_changed();
+    emit subscription_fetched();
+    emit login_succeeded();
+    return;
+#endif
+
     load_session();
 
     if (!session_.api_key.isEmpty()) {

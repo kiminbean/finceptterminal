@@ -174,4 +174,5 @@ fincept-qt/docs/CRYPTO_WALLET_CONNECT.md
 # Claude Code project state
 .claude/
 # Stray base64-named files (created by some tool/hook by accident)
-kZ05zXcgg+q2Qm8FprzLnQ==
+# stray base64-named scratch files (some tool keeps writing them)
+[A-Za-z0-9_+/]??????????????????????=*

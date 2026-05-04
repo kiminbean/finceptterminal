@@ -481,8 +481,16 @@ QString LlmService::get_endpoint_url() const {
             base.chop(1);
         if (p == "anthropic")
             return base + "/v1/messages";
+        // Z.AI Coding Plan: base already ends in `/api/coding/paas/v4`,
+        // chat endpoint is just `/chat/completions` (no extra `/v1`).
+        if (p == "zai")
+            return base + "/chat/completions";
         return base + "/v1/chat/completions";
     }
+
+    // Z.AI default endpoint (Coding Plan, OpenAI-compatible)
+    if (p == "zai")
+        return "https://api.z.ai/api/coding/paas/v4/chat/completions";
 
     if (p == "openai")
         return "https://api.openai.com/v1/chat/completions";

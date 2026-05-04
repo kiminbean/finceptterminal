@@ -202,13 +202,31 @@ void KrakenWsClient::resolve_symbols_then_connect() {
 }
 
 void KrakenWsClient::stop() {
-    if (heartbeat_timer_)
-        heartbeat_timer_->stop();
-    if (stats_timer_)
-        stats_timer_->stop();
-    ticker_count_since_log_.clear();
-    if (ws_)
-        ws_->disconnect();
+    // Tear-down may be called from the main thread (destructor, user action)
+    // while ws_ / timers live on the dedicated I/O thread (see start()'s
+    // moveToThread). Touching QSocketNotifier/QTimer from the wrong thread
+    // crashes inside the receiving event dispatcher with EXC_BAD_ACCESS in
+    // QSocketNotifier::setEnabled — observed 2026-05-05 on Kraken WS drop.
+    // Route every cross-thread mutation through the object's own event loop.
+    auto run_on_owner = [this](auto&& fn) {
+        if (!io_thread_ || QThread::currentThread() == thread()) {
+            fn();
+            return;
+        }
+        // Block until the I/O thread has finished tearing down so the
+        // destructor doesn't race with in-flight slot invocations.
+        QMetaObject::invokeMethod(this, std::forward<decltype(fn)>(fn), Qt::BlockingQueuedConnection);
+    };
+
+    run_on_owner([this]() {
+        if (heartbeat_timer_)
+            heartbeat_timer_->stop();
+        if (stats_timer_)
+            stats_timer_->stop();
+        ticker_count_since_log_.clear();
+        if (ws_)
+            ws_->disconnect();
+    });
     if (connected_.exchange(false))
         emit connection_changed(false);
     book_.reset();
