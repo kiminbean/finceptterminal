@@ -12,7 +12,6 @@ DataTable::DataTable(QWidget* parent) : QTableWidget(parent) {
     setSelectionMode(QAbstractItemView::SingleSelection);
     setEditTriggers(QAbstractItemView::NoEditTriggers);
     setShowGrid(false);
-    setUniformRowHeights(true); // All rows are 26px — skip per-row height calc
     verticalHeader()->setVisible(false);
     verticalHeader()->setDefaultSectionSize(26); // Set default once instead of per-row
     horizontalHeader()->setStretchLastSection(true);

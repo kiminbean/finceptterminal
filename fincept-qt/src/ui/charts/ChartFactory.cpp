@@ -27,7 +27,6 @@ QChartView* ChartFactory::line_chart(const QString& title, const QVector<DataPoi
     const QColor line_color = color.isEmpty() ? QColor(t.accent) : QColor(color);
     auto* series = new QLineSeries;
     series->setPen(QPen(line_color, 1.5));
-    series->reserve(data.size());
     for (const auto& p : data) {
         series->append(p.x, p.y);
     }
@@ -87,7 +86,6 @@ QChartView* ChartFactory::sparkline(const QVector<double>& data, const QString& 
     const QColor spark_color = color.isEmpty() ? QColor(t.text_secondary) : QColor(color);
     auto* series = new QLineSeries;
     series->setPen(QPen(spark_color, 1.0));
-    series->reserve(data.size());
     for (int i = 0; i < data.size(); ++i) {
         series->append(i, data[i]);
     }

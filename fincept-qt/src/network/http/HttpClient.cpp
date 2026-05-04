@@ -33,13 +33,13 @@ bool HttpClient::check_cache(const QString& key, Result<QJsonDocument>& out) con
         out = Result<QJsonDocument>::ok(entry->data);
         return true;
     }
-    cache_.remove(key);
+    const_cast<QCache<QString, CacheEntry>&>(cache_).remove(key);
     return false;
 }
 
 void HttpClient::store_cache(const QString& key, const QJsonDocument& data) {
     if (cache_ttl_seconds_ <= 0) return;
-    QMutexLocker lock(&cache_mutex_);
+    QMutexLocker lock(&const_cast<QMutex&>(cache_mutex_));
     auto* entry = new CacheEntry{data, QDateTime::currentMSecsSinceEpoch()};
     cache_.insert(key, entry);
 }
@@ -122,10 +122,10 @@ void HttpClient::handle_reply(QNetworkReply* reply, JsonCallback callback) {
 void HttpClient::get(const QString& url, JsonCallback callback) {
     LOG_DEBUG("HTTP", "GET " + url);
     // Check cache first (GET is idempotent — safe to cache)
-    Result<QJsonDocument> cached_result(QJsonDocument());
+    Result<QJsonDocument> cached_result = Result<QJsonDocument>::ok(QJsonDocument());
     if (check_cache(url, cached_result)) {
         LOG_DEBUG("HTTP", "Cache hit for " + url);
-        callback(std::move(cached_result));
+        callback(cached_result);
         return;
     }
     auto* reply = nam_->get(build_request(url));

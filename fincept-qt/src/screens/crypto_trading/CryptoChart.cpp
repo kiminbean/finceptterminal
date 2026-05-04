@@ -94,7 +94,7 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
     chart_view_ = new QChartView(chart_);
     chart_view_->setRenderHint(QPainter::Antialiasing, false);
     chart_view_->viewport()->setAttribute(Qt::WA_OpaquePaintEvent);
-    chart_view_->setRubberBand(QChartView::RectangleZoom);
+    chart_view_->setRubberBand(QChartView::RectangleRubberBand);
     layout->addWidget(chart_view_, 1);
 
     // Minimum height so chart is never too small
