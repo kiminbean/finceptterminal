@@ -27,13 +27,19 @@ without the flag the build is bit-for-bit equivalent to upstream.
 
 | Component | Behavior |
 | --- | --- |
-| `AuthManager::initialize()` | Skips `validate_saved_session()`. Synthesizes ENTERPRISE session with `credit_balance = 1e9`, emits `auth_state_changed`, `subscription_fetched`, `login_succeeded` immediately. |
-| Login / Register / Pricing screens | Never shown — `WindowFrame` lands directly on the dashboard because `AuthManager::is_authenticated()` returns true on first paint. |
-| `v002_llm_chat` migration | Replaces the seeded `fincept` LLM provider row with a `zai` (Z.AI Coding Plan, GLM-4.6) row. The `api_key` column is left blank for you to fill in. |
-| `LlmService` | Adds `zai` to the list of supported OpenAI-compatible providers. Routes `/chat/completions` to `https://api.z.ai/api/coding/paas/v4` by default. |
-| Toolbar / Navigation | Shows `enterprise` plan badge with very-large credit balance. |
+| `AuthManager::initialize()` | **Skips `load_session()` entirely** so macOS Keychain (`SecItemCopyMatching`) cannot block the main thread on a permission prompt. Synthesizes ENTERPRISE session with `credit_balance = 1e9` and emits `auth_state_changed` + `subscription_fetched` + `login_succeeded` immediately. |
+| `AuthManager::needs_pin_setup()` | Returns false. Combined with `PinManager::has_pin()` returning false, `WindowFrame` skips both PIN unlock and PIN setup screens. |
+| `AuthManager::refresh_user_data()` | No-op. Without this guard the 3-minute `WindowFrame::user_refresh_timer_` would call `api.fincept.in/user/profile`, get a 401, run `clear_session()`, and dump the user back into PIN setup on a 3-minute loop. |
+| `PinManager::has_pin()` | Always false — every consumer treats the terminal as having no PIN. |
+| `InactivityGuard::set_enabled()` | Treats every enable request as a disable. The 10-minute auto-lock can never arm even if Settings or another auth path tries to turn it on. |
+| Login / Register / Pricing screens | Never shown — `is_authenticated()` is true on first paint. |
+| `v002_llm_chat` migration | Replaces the seeded `fincept` LLM provider row with a `zai` (Z.AI Coding Plan, default model `glm-5.1`) row. `api_key` column is blank for you to fill in. |
+| `LlmService` | Adds `zai` to the supported-provider lists, dispatches chat to `https://api.z.ai/api/coding/paas/v4/chat/completions`, and **short-circuits `fetch_models("zai")`** to the curated catalog (`glm-5.1`, `glm-4.6`, `glm-4.5`, `glm-4.5-air`) because Z.AI Coding Plan does not expose `/v1/models`. |
+| `LlmConfigSection` (Settings → LLM) | Recognizes `zai` in `KNOWN_PROVIDERS`, `default_base_url`, and `fallback_models`. **Test Connection** reports "Connected — 4 models available" once a key is pasted. |
+| `ExchangeSession` Kraken WS bring-up | Skips `set_io_thread()` — the WS runs on the main thread. The dedicated I/O thread design crashed inside `QSocketNotifier::setEnabled` on natural disconnects (cross-thread `QSocketNotifier`/`QTimer` access from main-thread mutators). Trade-off: more main-thread work under heavy throughput. |
+| Toolbar / Navigation | Shows `enterprise` plan badge with a very-large credit balance. |
 
-`FINCEPT_LOCAL_MODE=OFF` (default) keeps all original behavior.
+`FINCEPT_LOCAL_MODE=OFF` (default) keeps all original behavior bit-for-bit.
 
 ## Pointing at your own Fincept server
 
