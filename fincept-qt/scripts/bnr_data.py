@@ -80,7 +80,7 @@ class BNRWrapper:
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            "User-Agent": "Fincept-Terminal/4.0.2",
+            "User-Agent": "Fincept-Terminal/4.0.3",
             "Accept":     "application/xml, text/xml, */*",
         })
 
