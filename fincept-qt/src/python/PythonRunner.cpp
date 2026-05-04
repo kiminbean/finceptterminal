@@ -106,12 +106,29 @@ QString PythonRunner::scripts_dir() const {
     return scripts_dir_;
 }
 
+void PythonRunner::invalidate_env_cache() {
+    QMutexLocker lock(&env_cache_mutex_);
+    cached_env_ms_ = 0;
+    cached_env_ = QProcessEnvironment{};
+}
+
 // ── Standard Python environment ──────────────────────────────────────────────
 // Shared by PythonRunner::run() and external direct-QProcess callers
 // (e.g., AgentService's stdin/stream paths). Anything every Python spawn needs
 // — encoding pins, FINCEPT_DATA_DIR, FINAGENT_DATA_DIR, base PYTHONPATH — lives
 // here. Script-specific path additions (parent-of-pkg) stay in run().
 QProcessEnvironment PythonRunner::build_python_env() const {
+    // Hot path: serve from cache when fresh. Avoids 17 SecureStorage keychain
+    // lookups per Python subprocess spawn — those are 1-10ms each on macOS,
+    // so a dashboard load that fans out 5+ scripts saves ~50-250ms total.
+    {
+        QMutexLocker lock(&env_cache_mutex_);
+        const qint64 now_ms = QDateTime::currentMSecsSinceEpoch();
+        if (cached_env_ms_ > 0 && now_ms - cached_env_ms_ < kEnvCacheTtlMs) {
+            return cached_env_;
+        }
+    }
+
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
     env.insert("PYTHONIOENCODING", "utf-8");
     env.insert("PYTHONDONTWRITEBYTECODE", "1");
@@ -163,6 +180,11 @@ QProcessEnvironment PythonRunner::build_python_env() const {
         LOG_DEBUG("Python", QString("Injected %1 credentials from SecureStorage").arg(injected));
     }
 
+    {
+        QMutexLocker lock(&env_cache_mutex_);
+        cached_env_ = env;
+        cached_env_ms_ = QDateTime::currentMSecsSinceEpoch();
+    }
     return env;
 }
 

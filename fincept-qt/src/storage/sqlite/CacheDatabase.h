@@ -23,6 +23,9 @@ class CacheDatabase {
     void close();
     bool is_open() const;
 
+    /// Returned QSqlQuery is forward-only — iterate with next() but do not
+    /// seek backwards or call size(). The driver skips building a random-
+    /// access result buffer for measurably faster reads.
     Result<QSqlQuery> execute(const QString& sql, const QVariantList& params = {});
     Result<void> exec(const QString& sql);
 

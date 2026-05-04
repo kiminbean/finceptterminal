@@ -29,6 +29,12 @@ void DataTable::set_headers(const QStringList& headers) {
 }
 
 void DataTable::set_data(const QVector<QStringList>& rows) {
+    // When sorting is enabled, every setItem() triggers a re-sort — O(n log n)
+    // per call, so a bulk load degrades to O(n^2 log n). Pause sorting for the
+    // duration of the load and resume after.
+    const bool was_sorting = isSortingEnabled();
+    if (was_sorting)
+        setSortingEnabled(false);
     setUpdatesEnabled(false);
     // Return existing items to the pool for reuse
     return_to_pool(rowCount());
@@ -41,9 +47,14 @@ void DataTable::set_data(const QVector<QStringList>& rows) {
         }
     }
     setUpdatesEnabled(true);
+    if (was_sorting)
+        setSortingEnabled(true);
 }
 
 void DataTable::set_data_bulk(const QVector<QStringList>& rows) {
+    const bool was_sorting = isSortingEnabled();
+    if (was_sorting)
+        setSortingEnabled(false);
     setUpdatesEnabled(false);
     return_to_pool(rowCount());
     setRowCount(rows.size());
@@ -55,6 +66,8 @@ void DataTable::set_data_bulk(const QVector<QStringList>& rows) {
         }
     }
     setUpdatesEnabled(true);
+    if (was_sorting)
+        setSortingEnabled(true);
 }
 
 void DataTable::add_row(const QStringList& row) {

@@ -1,4 +1,5 @@
 #pragma once
+#include <QMutex>
 #include <QObject>
 #include <QProcess>
 #include <QProcessEnvironment>
@@ -54,7 +55,16 @@ class PythonRunner : public QObject {
     /// Callers that run a script inside a sub-package may still need to prepend
     /// a "parent-of-pkg" directory to PYTHONPATH themselves — this helper only
     /// sets the shared base env.
+    ///
+    /// Result is cached for kEnvCacheTtlMs ms. The cache amortises 17+
+    /// SecureStorage keychain lookups across burst-spawn workloads (dashboard
+    /// load, tab switches). Call invalidate_env_cache() after writing a
+    /// credential to force a rebuild before the TTL expires.
     QProcessEnvironment build_python_env() const;
+
+    /// Drop the cached env returned by build_python_env(). Call after writing
+    /// a credential to SecureStorage so the next subprocess spawn picks it up.
+    void invalidate_env_cache();
 
     /// Check if python is available
     bool is_available() const;
@@ -72,6 +82,14 @@ class PythonRunner : public QObject {
     QString python_path_;
     QString scripts_dir_;
     bool python_init_done_ = false;
+
+    // Cached Python env (encoding pins + FINCEPT/FINAGENT paths + 17
+    // SecureStorage credentials). Built lazily by build_python_env() and
+    // refreshed when older than kEnvCacheTtlMs or when invalidated explicitly.
+    static constexpr qint64 kEnvCacheTtlMs = 30000;
+    mutable QProcessEnvironment cached_env_;
+    mutable qint64 cached_env_ms_ = 0;
+    mutable QMutex env_cache_mutex_;
 
     // Concurrency limiter
     static constexpr int DEFAULT_MAX_CONCURRENT = 3;
