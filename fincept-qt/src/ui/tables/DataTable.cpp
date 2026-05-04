@@ -30,15 +30,14 @@ void DataTable::set_headers(const QStringList& headers) {
 
 void DataTable::set_data(const QVector<QStringList>& rows) {
     setUpdatesEnabled(false);
-    setRowCount(0);
+    // Return existing items to the pool for reuse
+    return_to_pool(rowCount());
     setRowCount(rows.size()); // Pre-allocate all rows at once
     const QColor fg(colors::WHITE());
     for (int r = 0; r < rows.size(); ++r) {
         const auto& row = rows[r];
         for (int c = 0; c < row.size() && c < columnCount(); ++c) {
-            auto* item = new QTableWidgetItem(row[c]);
-            item->setForeground(fg);
-            setItem(r, c, item);
+            setItem(r, c, take_from_pool(row[c], fg));
         }
     }
     setUpdatesEnabled(true);
@@ -46,15 +45,13 @@ void DataTable::set_data(const QVector<QStringList>& rows) {
 
 void DataTable::set_data_bulk(const QVector<QStringList>& rows) {
     setUpdatesEnabled(false);
-    setRowCount(0);
+    return_to_pool(rowCount());
     setRowCount(rows.size());
     const QColor fg(colors::WHITE());
     for (int r = 0; r < rows.size(); ++r) {
         const auto& row = rows[r];
         for (int c = 0; c < row.size() && c < columnCount(); ++c) {
-            auto* item = new QTableWidgetItem(row[c]);
-            item->setForeground(fg);
-            setItem(r, c, item);
+            setItem(r, c, take_from_pool(row[c], fg));
         }
     }
     setUpdatesEnabled(true);
@@ -72,6 +69,7 @@ void DataTable::add_row(const QStringList& row) {
 }
 
 void DataTable::clear_data() {
+    return_to_pool(rowCount());
     setRowCount(0);
 }
 
@@ -88,3 +86,32 @@ void DataTable::set_cell_color(int row, int col, const QString& color) {
 }
 
 } // namespace fincept::ui
+
+QTableWidgetItem* DataTable::take_from_pool(const QString& text, const QColor& fg) {
+    QTableWidgetItem* item;
+    if (!item_pool_.isEmpty()) {
+        item = item_pool_.takeLast();
+        item->setText(text);
+        item->setForeground(fg);
+        item->setData(Qt::UserRole, QVariant()); // Reset user data
+    } else {
+        item = new QTableWidgetItem(text);
+        item->setForeground(fg);
+    }
+    return item;
+}
+
+void DataTable::return_to_pool(int old_row_count) {
+    const int cols = columnCount();
+    for (int r = 0; r < old_row_count; ++r) {
+        for (int c = 0; c < cols; ++c) {
+            if (auto* it = takeItem(r, c)) {
+                item_pool_.append(it);
+            }
+        }
+    }
+    // Cap pool size to prevent unbounded memory growth (max ~1000 items)
+    while (item_pool_.size() > 1000) {
+        delete item_pool_.takeLast();
+    }
+}

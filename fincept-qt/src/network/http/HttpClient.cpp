@@ -128,16 +128,28 @@ void HttpClient::get(const QString& url, JsonCallback callback) {
         callback(cached_result);
         return;
     }
+    // Request deduplication: if the same URL is already in-flight, just attach callback
+    if (in_flight_gets_.contains(url)) {
+        LOG_DEBUG("HTTP", "Dedup: attaching callback to in-flight GET " + url);
+        in_flight_gets_[url].append(std::move(callback));
+        return;
+    }
+    // First request for this URL — register as in-flight
+    in_flight_gets_[url].append(std::move(callback));
     auto* reply = nam_->get(build_request(url));
-    // Store in cache on success
+    // Capture the URL for dedup resolution
     auto cache_cb = [this, url](Result<QJsonDocument> result) {
         if (result.is_ok()) {
             store_cache(url, result.value());
         }
+        // Dispatch to all waiting callers
+        auto callers = in_flight_gets_.take(url);
+        for (auto& cb : callers) {
+            cb(result);
+        }
     };
-    handle_reply(reply, [cache_cb, cb = std::move(callback)](Result<QJsonDocument> result) mutable {
+    handle_reply(reply, [cache_cb](Result<QJsonDocument> result) mutable {
         cache_cb(result);
-        cb(std::move(result));
     });
 }
 

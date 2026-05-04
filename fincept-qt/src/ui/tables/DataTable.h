@@ -22,6 +22,14 @@ class DataTable : public QTableWidget {
 
     // Color a specific cell
     void set_cell_color(int row, int col, const QString& color);
+
+protected:
+    // Item recycling pool — reuse QTableWidgetItem objects instead of
+    // new/delete per row refresh. Dramatically reduces allocation overhead
+    // for real-time data feeds that refresh frequently.
+    QVector<QTableWidgetItem*> item_pool_;
+    QTableWidgetItem* take_from_pool(const QString& text, const QColor& fg);
+    void return_to_pool(int old_row_count);
 };
 
 } // namespace fincept::ui

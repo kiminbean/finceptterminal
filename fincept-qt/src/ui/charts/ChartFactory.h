@@ -20,7 +20,13 @@ class ChartFactory {
         double y;
     };
 
+    /// LTTB (Largest Triangle Three Buckets) downsampling.
+    /// Reduces data points to `threshold` while preserving visual shape.
+    /// Skipped if data.size() <= threshold.
+    static QVector<DataPoint> lttb_downsample(const QVector<DataPoint>& data, int threshold = 500);
+
     /// Line chart — used for price history, indices.
+    /// Automatically downsamples data exceeding 500 points via LTTB.
     static QChartView* line_chart(const QString& title, const QVector<DataPoint>& data, const QString& color = {});
 
     /// Bar chart — used for volume, comparisons.

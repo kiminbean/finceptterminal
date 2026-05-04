@@ -4,8 +4,69 @@
 
 #include <QtCharts/QBarCategoryAxis>
 #include <QtCharts/QValueAxis>
+#include <cmath>
 
 namespace fincept::ui {
+
+QVector<ChartFactory::DataPoint> ChartFactory::lttb_downsample(const QVector<DataPoint>& data, int threshold) {
+    const int n = data.size();
+    if (n <= threshold || threshold <= 2) return data;
+
+    QVector<DataPoint> sampled;
+    sampled.reserve(threshold);
+
+    // Always include first and last points
+    sampled.append(data[0]);
+
+    const double bucket_size = static_cast<double>(n - 2) / (threshold - 2);
+    int prev_index = 0;
+
+    for (int i = 1; i < threshold - 1; ++i) {
+        // Calculate bucket boundaries
+        const double avg_start = std::floor((i - 1) * bucket_size) + 1;
+        const double avg_end = std::floor(i * bucket_size) + 1;
+
+        // Calculate average of next bucket (used as reference point)
+        double avg_x = 0, avg_y = 0;
+        const double next_start = std::floor(i * bucket_size) + 1;
+        const double next_end = std::floor((i + 1) * bucket_size) + 1;
+        const int next_count = static_cast<int>(next_end - next_start);
+        if (next_count > 0) {
+            for (int j = static_cast<int>(next_start); j < static_cast<int>(next_end) && j < n; ++j) {
+                avg_x += data[j].x;
+                avg_y += data[j].y;
+            }
+            avg_x /= next_count;
+            avg_y /= next_count;
+        } else {
+            avg_x = data[std::min(static_cast<int>(next_start), n - 1)].x;
+            avg_y = data[std::min(static_cast<int>(next_start), n - 1)].y;
+        }
+
+        // Find point in current bucket with largest triangle area
+        double max_area = -1.0;
+        int max_index = static_cast<int>(avg_start);
+        const DataPoint& prev = data[prev_index];
+
+        for (int j = static_cast<int>(avg_start); j < static_cast<int>(avg_end) && j < n; ++j) {
+            // Triangle area formula (no division by 2, we only compare)
+            const double area = std::abs(
+                (prev.x - avg_x) * (data[j].y - prev.y) -
+                (prev.x - data[j].x) * (avg_y - prev.y)
+            );
+            if (area > max_area) {
+                max_area = area;
+                max_index = j;
+            }
+        }
+
+        sampled.append(data[max_index]);
+        prev_index = max_index;
+    }
+
+    sampled.append(data[n - 1]);
+    return sampled;
+}
 
 void ChartFactory::apply_theme(QChart* chart) {
     const auto& t = ThemeManager::instance().tokens();
@@ -27,7 +88,9 @@ QChartView* ChartFactory::line_chart(const QString& title, const QVector<DataPoi
     const QColor line_color = color.isEmpty() ? QColor(t.accent) : QColor(color);
     auto* series = new QLineSeries;
     series->setPen(QPen(line_color, 1.5));
-    for (const auto& p : data) {
+    // Downsample large datasets with LTTB for faster rendering
+    const auto plot_data = lttb_downsample(data, 500);
+    for (const auto& p : plot_data) {
         series->append(p.x, p.y);
     }
 

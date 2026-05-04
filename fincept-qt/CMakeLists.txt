@@ -277,6 +277,18 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
             add_link_options($<$<CONFIG:Release>:-flto=auto>)
         endif()
     endif()
+    # Dead code elimination at link time — separate sections per symbol so
+    # the linker can strip unreferenced functions/data from the final binary.
+    # macOS ld64 uses -dead_strip instead of --gc-sections.
+    if(APPLE)
+        add_compile_options($<$<CONFIG:Release>:-ffunction-sections>)
+        add_compile_options($<$<CONFIG:Release>:-fdata-sections>)
+        add_link_options($<$<CONFIG:Release>:-dead_strip>)
+    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        add_compile_options($<$<CONFIG:Release>:-ffunction-sections>)
+        add_compile_options($<$<CONFIG:Release>:-fdata-sections>)
+        add_link_options($<$<CONFIG:Release>:-Wl,--gc-sections>)
+    endif()
 endif()
 
 # Suppress Windows min/max macros that break std::min/std::max in unity batches

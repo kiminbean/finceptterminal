@@ -12,6 +12,8 @@
 #include <QMutex>
 
 #include <functional>
+#include <QMap>
+#include <QVector>
 
 namespace fincept {
 
@@ -57,6 +59,11 @@ class HttpClient : public QObject {
     mutable QMutex cache_mutex_;
     bool check_cache(const QString& key, Result<QJsonDocument>& out) const;
     void store_cache(const QString& key, const QJsonDocument& data);
+
+    // Request deduplication — coalesces duplicate in-flight GET requests
+    // so only one network call is made; all callers share the result.
+    QMap<QString, QVector<JsonCallback>> in_flight_gets_;
+    void handle_deduped_get(const QString& url, QNetworkReply* reply, JsonCallback first_callback);
 };
 
 } // namespace fincept
