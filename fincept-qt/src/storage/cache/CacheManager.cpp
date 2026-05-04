@@ -43,8 +43,19 @@ bool CacheManager::mem_lookup(const QString& key, QString& out) const {
     return true;
 }
 
-void CacheManager::mem_store(const QString& key, const QString& value, int ttl_seconds) const {
+quint64 CacheManager::mem_generation() const {
     QMutexLocker lock(&mem_mutex_);
+    return invalidation_gen_;
+}
+
+void CacheManager::mem_store_if_unchanged(const QString& key, const QString& value, int ttl_seconds,
+                                          quint64 gen_seen) const {
+    QMutexLocker lock(&mem_mutex_);
+    // If any remove*/clear* fired between gen_seen capture and now, a deleted
+    // key may have just been read from SQL — refuse to repopulate to avoid
+    // resurrecting it for the duration of its TTL.
+    if (invalidation_gen_ != gen_seen)
+        return;
     auto* e = new MemoryEntry{value, ttl_seconds > 0
                                          ? QDateTime::currentMSecsSinceEpoch() + qint64(ttl_seconds) * 1000
                                          : 0};
@@ -53,16 +64,19 @@ void CacheManager::mem_store(const QString& key, const QString& value, int ttl_s
 
 void CacheManager::mem_remove(const QString& key) {
     QMutexLocker lock(&mem_mutex_);
+    ++invalidation_gen_;
     mem_cache_.remove(key);
 }
 
 void CacheManager::mem_clear() {
     QMutexLocker lock(&mem_mutex_);
+    ++invalidation_gen_;
     mem_cache_.clear();
 }
 
 void CacheManager::mem_remove_prefix(const QString& prefix) {
     QMutexLocker lock(&mem_mutex_);
+    ++invalidation_gen_;
     const auto keys = mem_cache_.keys();
     for (const QString& k : keys) {
         if (k.startsWith(prefix))
@@ -92,8 +106,12 @@ void CacheManager::put(const QString& key, const QVariant& value, int ttl_second
                 "  size_bytes=excluded.size_bytes",
                 {key, data, category, ttl_seconds, ttl_seconds, size_bytes});
 
-    // Refresh the in-memory tier so subsequent reads are served without a SQL roundtrip.
-    mem_store(key, data, ttl_seconds);
+    // Refresh the in-memory tier so subsequent reads are served without a SQL
+    // roundtrip. Using the gen-checked variant means a concurrent remove*
+    // of any key will cause this store to be skipped — the next get() will
+    // simply repopulate from SQL. That's strictly safer than caching the
+    // put's value over a possibly-deleted row.
+    mem_store_if_unchanged(key, data, ttl_seconds, mem_generation());
 }
 
 QVariant CacheManager::get(const QString& key) const {
@@ -104,6 +122,11 @@ QVariant CacheManager::get(const QString& key) const {
     QString cached;
     if (mem_lookup(key, cached))
         return cached;
+
+    // Capture generation before the SQL fetch — if a concurrent remove()
+    // bumps the counter while we read, we'll refuse to repopulate the
+    // memory tier with what may be a just-deleted entry.
+    const quint64 gen_seen = mem_generation();
 
     auto& cdb = CacheDatabase::instance();
     if (!cdb.is_open())
@@ -123,7 +146,7 @@ QVariant CacheManager::get(const QString& key) const {
     const QString value = q.value(0).toString();
     const int remaining_seconds = q.value(1).toInt();
     if (remaining_seconds > 0)
-        mem_store(key, value, remaining_seconds);
+        mem_store_if_unchanged(key, value, remaining_seconds, gen_seen);
     return value;
 }
 

@@ -19,6 +19,7 @@
 #include "screens/settings/McpServersSection.h"
 #include "screens/settings/PythonEnvSection.h"
 #include "screens/settings/VoiceConfigSection.h"
+#include "python/PythonRunner.h"
 #include "services/notifications/NotificationService.h"
 #include "services/stt/SpeechService.h"
 #include "services/tts/TtsService.h"
@@ -448,6 +449,9 @@ QWidget* SettingsScreen::build_credentials() {
             QString val = field->text().trimmed();
             if (val.isEmpty()) {
                 SecureStorage::instance().remove(key);
+                // Drop the cached Python env so the next subprocess spawn picks up
+                // the deletion immediately (instead of waiting up to TTL ms).
+                python::PythonRunner::instance().invalidate_env_cache();
                 field->setPlaceholderText("Not configured");
                 status_lbl->setText("Cleared");
                 status_lbl->setStyleSheet(
@@ -456,6 +460,7 @@ QWidget* SettingsScreen::build_credentials() {
             } else {
                 auto r = SecureStorage::instance().store(key, val);
                 if (r.is_ok()) {
+                    python::PythonRunner::instance().invalidate_env_cache();
                     field->clear();
                     field->setPlaceholderText("•••••••• (saved)");
                     status_lbl->setText("Saved ✓");

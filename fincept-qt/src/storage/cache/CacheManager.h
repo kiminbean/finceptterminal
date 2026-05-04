@@ -46,11 +46,20 @@ class CacheManager : public QObject {
     mutable QCache<QString, MemoryEntry> mem_cache_{512};
     mutable QMutex mem_mutex_;
 
+    // Invalidation generation counter — bumped by every remove*/clear*. get()
+    // captures the value before its SQL fetch; if it differs by store-time, a
+    // concurrent remove happened during the fetch and we skip the store.
+    // Without this, get() can re-cache a key that remove() just deleted, and
+    // the stale entry lives in memory until its TTL expires.
+    mutable quint64 invalidation_gen_ = 0;
+
     bool mem_lookup(const QString& key, QString& out) const;
-    void mem_store(const QString& key, const QString& value, int ttl_seconds) const;
+    void mem_store_if_unchanged(const QString& key, const QString& value, int ttl_seconds,
+                                quint64 gen_seen) const;
     void mem_remove(const QString& key);
     void mem_clear();
     void mem_remove_prefix(const QString& prefix);
+    quint64 mem_generation() const;
 };
 
 } // namespace fincept

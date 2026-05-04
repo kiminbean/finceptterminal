@@ -86,7 +86,16 @@ class PythonRunner : public QObject {
     // Cached Python env (encoding pins + FINCEPT/FINAGENT paths + 17
     // SecureStorage credentials). Built lazily by build_python_env() and
     // refreshed when older than kEnvCacheTtlMs or when invalidated explicitly.
-    static constexpr qint64 kEnvCacheTtlMs = 30000;
+    //
+    // The TTL is short by design: invalidate_env_cache() is called from every
+    // managed-credential write path (SettingsScreen, DatabentoService) so
+    // explicit invalidation is the primary correctness mechanism; the TTL is
+    // a backstop that bounds the staleness window if a future write path is
+    // added without remembering to invalidate. 5s gives near-perfect cache
+    // hit rate on burst-spawn workloads (dashboard load, tab switches all
+    // complete inside the window) while keeping the worst-case staleness
+    // small enough to be unsurprising during credential rotation.
+    static constexpr qint64 kEnvCacheTtlMs = 5000;
     mutable QProcessEnvironment cached_env_;
     mutable qint64 cached_env_ms_ = 0;
     mutable QMutex env_cache_mutex_;
