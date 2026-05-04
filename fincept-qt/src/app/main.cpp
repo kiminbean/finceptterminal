@@ -144,6 +144,14 @@ int main(int argc, char* argv[]) {
     // (Qt Charts, QOpenGLWidget) — prevents black rendering in floating windows.
     QApplication::setAttribute(Qt::AA_ShareOpenGLContexts);
 
+    // GPU-accelerated rendering — use Desktop OpenGL for hardware-accelerated
+    // compositing. Falls back to software rasterizer on systems without GL.
+    QApplication::setAttribute(Qt::AA_UseDesktopOpenGL);
+
+    // Smooth pixmap scaling for HiDPI (Retina) displays.
+    QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+    QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+
     // SingleApplication enforces one process per profile.
     // The instance key is scoped to the active profile name, so
     // "FinceptTerminal --profile work" and "FinceptTerminal --profile personal"

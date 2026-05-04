@@ -13,6 +13,7 @@ API Documentation:
 
 import sys
 import json
+import time
 import requests
 from typing import Dict, List, Optional, Any, Union
 from datetime import datetime, timedelta
@@ -22,6 +23,14 @@ import os
 BASE_URL = "https://api.worldbank.org/v2"
 DEFAULT_FORMAT = "json"
 TIMEOUT = 30
+
+# Connection pooling — reuse TCP connections across requests
+_session = requests.Session()
+_session.headers.update({"Accept": "application/json", "Accept-Encoding": "gzip"})
+
+# Simple response cache with TTL for deduplication
+_cache: Dict[str, tuple] = {}
+_CACHE_TTL = 60  # 60s default TTL for GET responses
 
 # Common World Bank Indicator Codes
 GDP_PER_CAPITA = "NY.GDP.PCAP.CD"
@@ -72,11 +81,19 @@ def _make_request(endpoint: str, params: Optional[Dict[str, Any]] = None) -> Dic
 
         params['format'] = DEFAULT_FORMAT
 
-        # Make request with timeout
-        response = requests.get(full_url, params=params, timeout=TIMEOUT)
+        # Response cache deduplication
+        cache_key = f"{endpoint}:{sorted(params.items())}"
+        now = time.time()
+        cached = _cache.get(cache_key)
+        if cached is not None and (now - cached[0]) < _CACHE_TTL:
+            return cached[1]
+
+        # Make request with timeout using pooled connection
+        response = _session.get(full_url, params=params, timeout=TIMEOUT)
         response.raise_for_status()
 
         data = response.json()
+        _cache[cache_key] = (now, data)
 
         # World Bank API returns array where first element contains metadata
         if isinstance(data, list) and len(data) >= 2:

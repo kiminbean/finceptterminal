@@ -2,6 +2,7 @@
 
 #include "core/logging/Logger.h"
 
+#include <QMutexLocker>
 #include <QUrl>
 
 namespace fincept {
@@ -13,6 +14,34 @@ HttpClient& HttpClient::instance() {
 
 HttpClient::HttpClient() {
     nam_ = new QNetworkAccessManager(this);
+    // Enable connection pooling — QNetworkAccessManager already reuses connections
+    // but we set higher defaults for concurrent requests.
+    nam_->setTransferTimeout(30000); // 30s default timeout
+}
+
+void HttpClient::set_cache_ttl(int seconds) {
+    cache_ttl_seconds_ = seconds;
+}
+
+bool HttpClient::check_cache(const QString& key, Result<QJsonDocument>& out) const {
+    if (cache_ttl_seconds_ <= 0) return false;
+    QMutexLocker lock(&const_cast<QMutex&>(cache_mutex_));
+    auto* entry = cache_.object(key);
+    if (!entry) return false;
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if ((now - entry->timestamp) / 1000 < cache_ttl_seconds_) {
+        out = Result<QJsonDocument>::ok(entry->data);
+        return true;
+    }
+    cache_.remove(key);
+    return false;
+}
+
+void HttpClient::store_cache(const QString& key, const QJsonDocument& data) {
+    if (cache_ttl_seconds_ <= 0) return;
+    QMutexLocker lock(&cache_mutex_);
+    auto* entry = new CacheEntry{data, QDateTime::currentMSecsSinceEpoch()};
+    cache_.insert(key, entry);
 }
 
 QNetworkRequest HttpClient::build_request(const QString& url) const {
@@ -22,6 +51,8 @@ QNetworkRequest HttpClient::build_request(const QString& url) const {
     QNetworkRequest req{qurl};
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     req.setHeader(QNetworkRequest::UserAgentHeader, "FinceptTerminal/4.0");
+    // Request compressed responses to reduce bandwidth
+    req.setRawHeader("Accept-Encoding", "gzip, deflate");
 
     // Only attach Fincept auth headers when the request targets the configured
     // Fincept API host. Notification providers (Slack, Discord, Telegram,
@@ -90,8 +121,24 @@ void HttpClient::handle_reply(QNetworkReply* reply, JsonCallback callback) {
 
 void HttpClient::get(const QString& url, JsonCallback callback) {
     LOG_DEBUG("HTTP", "GET " + url);
+    // Check cache first (GET is idempotent — safe to cache)
+    Result<QJsonDocument> cached_result(QJsonDocument());
+    if (check_cache(url, cached_result)) {
+        LOG_DEBUG("HTTP", "Cache hit for " + url);
+        callback(std::move(cached_result));
+        return;
+    }
     auto* reply = nam_->get(build_request(url));
-    handle_reply(reply, std::move(callback));
+    // Store in cache on success
+    auto cache_cb = [this, url](Result<QJsonDocument> result) {
+        if (result.is_ok()) {
+            store_cache(url, result.value());
+        }
+    };
+    handle_reply(reply, [cache_cb, cb = std::move(callback)](Result<QJsonDocument> result) mutable {
+        cache_cb(result);
+        cb(std::move(result));
+    });
 }
 
 void HttpClient::post(const QString& url, const QJsonObject& body, JsonCallback callback) {

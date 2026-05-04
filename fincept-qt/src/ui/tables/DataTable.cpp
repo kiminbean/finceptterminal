@@ -12,7 +12,9 @@ DataTable::DataTable(QWidget* parent) : QTableWidget(parent) {
     setSelectionMode(QAbstractItemView::SingleSelection);
     setEditTriggers(QAbstractItemView::NoEditTriggers);
     setShowGrid(false);
+    setUniformRowHeights(true); // All rows are 26px — skip per-row height calc
     verticalHeader()->setVisible(false);
+    verticalHeader()->setDefaultSectionSize(26); // Set default once instead of per-row
     horizontalHeader()->setStretchLastSection(true);
     horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     setStyleSheet(QString("QTableWidget { background: %1; alternate-background-color: %2; "
@@ -28,21 +30,46 @@ void DataTable::set_headers(const QStringList& headers) {
 }
 
 void DataTable::set_data(const QVector<QStringList>& rows) {
+    setUpdatesEnabled(false);
     setRowCount(0);
-    for (const auto& row : rows) {
-        add_row(row);
+    setRowCount(rows.size()); // Pre-allocate all rows at once
+    const QColor fg(colors::WHITE());
+    for (int r = 0; r < rows.size(); ++r) {
+        const auto& row = rows[r];
+        for (int c = 0; c < row.size() && c < columnCount(); ++c) {
+            auto* item = new QTableWidgetItem(row[c]);
+            item->setForeground(fg);
+            setItem(r, c, item);
+        }
     }
+    setUpdatesEnabled(true);
+}
+
+void DataTable::set_data_bulk(const QVector<QStringList>& rows) {
+    setUpdatesEnabled(false);
+    setRowCount(0);
+    setRowCount(rows.size());
+    const QColor fg(colors::WHITE());
+    for (int r = 0; r < rows.size(); ++r) {
+        const auto& row = rows[r];
+        for (int c = 0; c < row.size() && c < columnCount(); ++c) {
+            auto* item = new QTableWidgetItem(row[c]);
+            item->setForeground(fg);
+            setItem(r, c, item);
+        }
+    }
+    setUpdatesEnabled(true);
 }
 
 void DataTable::add_row(const QStringList& row) {
     int r = rowCount();
     insertRow(r);
+    const QColor fg(colors::WHITE());
     for (int c = 0; c < row.size() && c < columnCount(); ++c) {
         auto* item = new QTableWidgetItem(row[c]);
-        item->setForeground(QColor(colors::WHITE()));
+        item->setForeground(fg);
         setItem(r, c, item);
     }
-    setRowHeight(r, 26);
 }
 
 void DataTable::clear_data() {

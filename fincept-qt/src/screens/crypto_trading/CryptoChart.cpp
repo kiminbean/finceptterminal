@@ -93,6 +93,8 @@ CryptoChart::CryptoChart(QWidget* parent) : QWidget(parent) {
 
     chart_view_ = new QChartView(chart_);
     chart_view_->setRenderHint(QPainter::Antialiasing, false);
+    chart_view_->viewport()->setAttribute(Qt::WA_OpaquePaintEvent);
+    chart_view_->setRubberBand(QChartView::RectangleZoom);
     layout->addWidget(chart_view_, 1);
 
     // Minimum height so chart is never too small
@@ -119,6 +121,7 @@ QString CryptoChart::current_timeframe() const {
 
 void CryptoChart::set_candles(const QVector<trading::Candle>& candles) {
     candles_ = candles;
+    bounds_dirty_ = true;
     rebuild_chart();
 
     // If the user changed the timeframe while the previous fetch was in-flight,

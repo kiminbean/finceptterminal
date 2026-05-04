@@ -7,6 +7,9 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QObject>
+#include <QCache>
+#include <QDateTime>
+#include <QMutex>
 
 #include <functional>
 
@@ -31,6 +34,9 @@ class HttpClient : public QObject {
     void clear_session_token();
     void set_base_url(const QString& base);
 
+    /// Set cache TTL in seconds (default 0 = no caching).
+    void set_cache_ttl(int seconds);
+
   private:
     HttpClient();
     QNetworkRequest build_request(const QString& url) const;
@@ -40,6 +46,17 @@ class HttpClient : public QObject {
     QString base_url_;
     QString api_key_;
     QString session_token_;
+
+    // Request cache with TTL
+    struct CacheEntry {
+        QJsonDocument data;
+        qint64 timestamp; // ms since epoch
+    };
+    QCache<QString, CacheEntry> cache_{256}; // max 256 entries
+    int cache_ttl_seconds_ = 0; // 0 = disabled
+    mutable QMutex cache_mutex_;
+    bool check_cache(const QString& key, Result<QJsonDocument>& out) const;
+    void store_cache(const QString& key, const QJsonDocument& data);
 };
 
 } // namespace fincept

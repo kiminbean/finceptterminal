@@ -9,12 +9,24 @@ Usage: python coingecko_complete_wrapper.py <command> [args]
 import sys
 import json
 import os
+import time
 import requests
+from functools import lru_cache
 from typing import Dict, Any, List, Optional
 
 # --- 1. CONFIGURATION ---
 API_KEY = os.environ.get('COINGECKO_API_KEY')
 BASE_URL = "https://pro-api.coingecko.com/api/v3" if API_KEY else "https://api.coingecko.com/api/v3"
+
+# Connection pooling — reuse TCP connections across requests for lower latency
+_session = requests.Session()
+_session.headers.update({"Accept": "application/json", "Accept-Encoding": "gzip"})
+if API_KEY:
+    _session.headers.update({"x-cg-pro-api-key": API_KEY})
+
+# Per-endpoint response cache: {(endpoint, frozenset(params)): (timestamp, data)}
+_response_cache: Dict[tuple, tuple] = {}
+_CACHE_TTL_SECONDS = 30  # 30s default TTL for GET responses
 
 def _make_request(endpoint: str, params: Optional[Dict[str, Any]] = None) -> Any:
     """A private helper function to handle all API requests and errors."""
@@ -23,10 +35,20 @@ def _make_request(endpoint: str, params: Optional[Dict[str, Any]] = None) -> Any
         if params is None:
             params = {}
         params['x_cg_pro_api_key'] = API_KEY
+
+    # Response caching for GET requests — dedup rapid repeated calls
+    cache_key = (endpoint, frozenset(params.items()) if params else frozenset())
+    now = time.time()
+    cached = _response_cache.get(cache_key)
+    if cached is not None and (now - cached[0]) < _CACHE_TTL_SECONDS:
+        return cached[1]
+
     try:
-        response = requests.get(full_url, params=params, timeout=30)
+        response = _session.get(full_url, params=params, timeout=30)
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        _response_cache[cache_key] = (now, data)
+        return data
     except requests.exceptions.HTTPError as e:
         return {"error": f"HTTP Error: {e.response.status_code} - {e.response.text}"}
     except requests.exceptions.RequestException as e:

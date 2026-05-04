@@ -17,6 +17,9 @@ class DataTable : public QTableWidget {
     void clear_data();
     void set_column_widths(const QVector<int>& widths);
 
+    /// Bulk-add rows without per-row signals — significantly faster for large datasets.
+    void set_data_bulk(const QVector<QStringList>& rows);
+
     // Color a specific cell
     void set_cell_color(int row, int col, const QString& color);
 };

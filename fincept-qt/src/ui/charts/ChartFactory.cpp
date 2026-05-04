@@ -24,9 +24,10 @@ void ChartFactory::apply_theme(QChart* chart) {
 
 QChartView* ChartFactory::line_chart(const QString& title, const QVector<DataPoint>& data, const QString& color) {
     const auto& t = ThemeManager::instance().tokens();
-    const QString line_color = color.isEmpty() ? QString(t.accent) : color;
+    const QColor line_color = color.isEmpty() ? QColor(t.accent) : QColor(color);
     auto* series = new QLineSeries;
-    series->setPen(QPen(QColor(line_color), 1.5));
+    series->setPen(QPen(line_color, 1.5));
+    series->reserve(data.size());
     for (const auto& p : data) {
         series->append(p.x, p.y);
     }
@@ -40,6 +41,7 @@ QChartView* ChartFactory::line_chart(const QString& title, const QVector<DataPoi
 
     auto* view = new QChartView(chart);
     view->setRenderHint(QPainter::Antialiasing);
+    view->viewport()->setAttribute(Qt::WA_OpaquePaintEvent);
     view->setStyleSheet("background: transparent; border: none;");
     return view;
 }
@@ -47,9 +49,9 @@ QChartView* ChartFactory::line_chart(const QString& title, const QVector<DataPoi
 QChartView* ChartFactory::bar_chart(const QString& title, const QStringList& categories, const QVector<double>& values,
                                     const QString& color) {
     const auto& t = ThemeManager::instance().tokens();
-    const QString bar_color = color.isEmpty() ? QString(t.accent) : color;
+    const QColor bar_color = color.isEmpty() ? QColor(t.accent) : QColor(color);
     auto* set = new QBarSet("");
-    set->setColor(QColor(bar_color));
+    set->setColor(bar_color);
     for (double v : values) {
         *set << v;
     }
@@ -75,15 +77,17 @@ QChartView* ChartFactory::bar_chart(const QString& title, const QStringList& cat
 
     auto* view = new QChartView(chart);
     view->setRenderHint(QPainter::Antialiasing);
+    view->viewport()->setAttribute(Qt::WA_OpaquePaintEvent);
     view->setStyleSheet("background: transparent; border: none;");
     return view;
 }
 
 QChartView* ChartFactory::sparkline(const QVector<double>& data, const QString& color, int width, int height) {
     const auto& t = ThemeManager::instance().tokens();
-    const QString spark_color = color.isEmpty() ? QString(t.text_secondary) : color;
+    const QColor spark_color = color.isEmpty() ? QColor(t.text_secondary) : QColor(color);
     auto* series = new QLineSeries;
-    series->setPen(QPen(QColor(spark_color), 1.0));
+    series->setPen(QPen(spark_color, 1.0));
+    series->reserve(data.size());
     for (int i = 0; i < data.size(); ++i) {
         series->append(i, data[i]);
     }
@@ -103,6 +107,7 @@ QChartView* ChartFactory::sparkline(const QVector<double>& data, const QString& 
     auto* view = new QChartView(chart);
     view->setRenderHint(QPainter::Antialiasing);
     view->setFixedSize(width, height);
+    view->viewport()->setAttribute(Qt::WA_OpaquePaintEvent);
     view->setStyleSheet("background: transparent; border: none;");
     return view;
 }

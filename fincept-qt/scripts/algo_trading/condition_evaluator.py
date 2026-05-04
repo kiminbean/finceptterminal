@@ -72,13 +72,18 @@ def load_candles_from_db(db_path: str, symbol: str, timeframe: str, limit: int =
                 conn, params=(timeframe,)
             )
             log.debug(f"  Exact match failed. Trying normalized={norm}. Cached symbols for tf={timeframe}: {cached_symbols['symbol'].tolist()}")
-            for _, row in cached_symbols.iterrows():
-                cached_sym = row['symbol']
-                cached_norm = _normalize_symbol(cached_sym)
-                if cached_norm == norm or norm.startswith(cached_norm) or cached_norm.startswith(norm):
-                    df = pd.read_sql_query(query, conn, params=(cached_sym, timeframe, limit))
-                    log.debug(f"  Normalized/prefix match found: '{cached_sym}' => {len(df)} rows")
-                    break
+            # Vectorized normalization instead of iterrows
+            cached_symbols['normalized'] = cached_symbols['symbol'].apply(_normalize_symbol)
+            match_mask = (
+                (cached_symbols['normalized'] == norm) |
+                cached_symbols['normalized'].str.startswith(norm[:min(len(norm), 8)]) |
+                cached_symbols['normalized'].apply(lambda x: norm.startswith(x[:min(len(x), 8)]))
+            )
+            matched = cached_symbols.loc[match_mask]
+            if not matched.empty:
+                cached_sym = matched.iloc[0]['symbol']
+                df = pd.read_sql_query(query, conn, params=(cached_sym, timeframe, limit))
+                log.debug(f"  Normalized/prefix match found: '{cached_sym}' => {len(df)} rows")
         except Exception as e:
             log.warning(f"  Fallback symbol search failed: {e}")
 

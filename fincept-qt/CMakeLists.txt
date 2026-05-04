@@ -153,9 +153,14 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Unity build for infrastructure layers (safe — no local symbol conflicts)
 # Screens are excluded below via SKIP_UNITY_BUILD_INCLUSION (too many local statics/functions)
 set(CMAKE_UNITY_BUILD ON)
-# Batch size 14: sweet spot for MSVC — keeps each unity TU under ~30s to compile.
-# 32 was too large: one TU change forced a 32-file recompile; 14 limits blast radius.
-set(CMAKE_UNITY_BUILD_BATCH_SIZE 14)
+# Batch size: 14 for MSVC (sweet spot for compile-time), 10 for ARM (tighter
+# memory pressure during compilation, ARM cores are efficient but compile
+# jobs are single-threaded per TU). 14 kept as default for x86.
+if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+    set(CMAKE_UNITY_BUILD_BATCH_SIZE 10)
+else()
+    set(CMAKE_UNITY_BUILD_BATCH_SIZE 14)
+endif()
 
 # FetchContent: default to skipping the update step after first download to cut
 # configure time by 5-15s on incremental configures. Not FORCEd so developers
@@ -175,6 +180,30 @@ option(FINCEPT_ENABLE_LTO
     OFF)
 if(DEFINED ENV{CI})
     set(FINCEPT_ENABLE_LTO ON CACHE BOOL "" FORCE)
+endif()
+# Default LTO ON for macOS Release builds — thin LTO on Apple Silicon is fast
+if(APPLE AND NOT DEFINED ENV{CI} AND NOT FINCEPT_ENABLE_LTO)
+    set(FINCEPT_ENABLE_LTO ON CACHE BOOL "" FORCE)
+endif()
+
+# ── macOS Apple Silicon / ARM64 release optimisations ─────────────────────────
+# Thin LTO is significantly faster to link than full LTO while still delivering
+# most of the cross-TU optimisation benefit. -O3 enables auto-vectorisation and
+# more aggressive inlining than -O2. -mcpu=apple-m1 targets the ARM Neoverse
+# microarchitecture (covers M1–M4). Hidden visibility reduces binary size and
+# improves dynamic linking speed by exporting only explicit symbols.
+if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+    # Thin LTO for Release builds — faster than full LTO, still good optimisation
+    if(FINCEPT_ENABLE_LTO)
+        add_compile_options($<$<CONFIG:Release>:-flto=thin>)
+        add_link_options($<$<CONFIG:Release>:-flto=thin>)
+    endif()
+    # -O3 for maximum optimisation (auto-vectorisation, loop unrolling)
+    add_compile_options($<$<CONFIG:Release>:-O3>)
+    # Target Apple Silicon microarchitecture
+    add_compile_options($<$<CONFIG:Release>:-mcpu=apple-m1>)
+    # Hidden visibility — smaller binary, faster loads, explicit exports only
+    add_compile_options(-fvisibility=hidden -fvisibility-inlines-hidden)
 endif()
 
 # MSVC compiler flags for maximum build throughput:
@@ -238,6 +267,15 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     add_compile_options(-Wall -Wextra -Wpedantic)
     if(DEFINED ENV{CI})
         add_compile_options(-Werror)
+    endif()
+    # Hidden visibility for GCC/Clang on Linux — smaller binary, faster loads
+    if(NOT APPLE)
+        add_compile_options(-fvisibility=hidden -fvisibility-inlines-hidden)
+        # GCC/Clang LTO for Release on Linux
+        if(FINCEPT_ENABLE_LTO)
+            add_compile_options($<$<CONFIG:Release>:-flto=auto>)
+            add_link_options($<$<CONFIG:Release>:-flto=auto>)
+        endif()
     endif()
 endif()
 

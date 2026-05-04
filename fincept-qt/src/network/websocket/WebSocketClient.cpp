@@ -2,6 +2,9 @@
 
 #include "core/logging/Logger.h"
 
+#include <QRandomGenerator>
+#include <algorithm>
+
 namespace fincept {
 
 #ifdef HAS_QT_WEBSOCKETS
@@ -50,7 +53,10 @@ void WebSocketClient::on_disconnected() {
     LOG_WARN("WS", "Disconnected from " + url_);
     emit disconnected();
     if (reconnect_attempts_ < MAX_RECONNECT_ATTEMPTS) {
-        int delay = std::min(1000 * (1 << reconnect_attempts_), 30000);
+        // Exponential backoff with jitter: base * 2^n + random jitter
+        int base_delay = std::min(1000 * (1 << reconnect_attempts_), 30000);
+        int jitter = static_cast<int>(QRandomGenerator::global()->bounded(500)) - 250; // ±250ms jitter
+        int delay = std::max(100, base_delay + jitter);
         reconnect_timer_.start(delay);
     }
 }
