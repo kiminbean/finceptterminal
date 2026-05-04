@@ -8,6 +8,7 @@
 
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QLocale>
 #include <QMenu>
 #include <QPointer>
 #include <QResizeEvent>
@@ -15,6 +16,20 @@
 #include <QVBoxLayout>
 
 namespace fincept::screens {
+
+namespace {
+// Compact volume formatter: 1234 -> "1k", 1_234_567 -> "1.2M",
+// 1_234_567_890 -> "1.2B". Matches the convention used by the crypto
+// MarketsListPanel so the two screens read consistently.
+QString format_volume_compact(double v) {
+    if (v <= 0)
+        return QStringLiteral("--");
+    if (v >= 1e9) return QStringLiteral("%1B").arg(QLocale::system().toString(v / 1e9, 'f', 1));
+    if (v >= 1e6) return QStringLiteral("%1M").arg(QLocale::system().toString(v / 1e6, 'f', 1));
+    if (v >= 1e3) return QStringLiteral("%1k").arg(QLocale::system().toString(v / 1e3, 'f', 0));
+    return QLocale::system().toString(v, 'f', 0);
+}
+} // namespace
 
 MarketPanel::MarketPanel(const MarketPanelConfig& config, QWidget* parent)
     : QWidget(parent), config_(config) {
@@ -364,7 +379,10 @@ void MarketPanel::populate(const QVector<services::QuoteData>& quotes) {
             else if (col == "CHG%")   table_->setItem(row, ci, mk(QString("%1%2%").arg(arr).arg(std::abs(q.change_pct), 0, 'f', 2), cc));
             else if (col == "HIGH")   table_->setItem(row, ci, mk(QString::number(q.high, 'f', 2), ui::colors::TEXT_SECONDARY()));
             else if (col == "LOW")    table_->setItem(row, ci, mk(QString::number(q.low,  'f', 2), ui::colors::TEXT_SECONDARY()));
-            else if (col == "VOL")    table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));  // TODO: wire volume from API response
+            else if (col == "VOL")    table_->setItem(row, ci,
+                                                          mk(format_volume_compact(q.volume),
+                                                             q.volume > 0 ? ui::colors::TEXT_SECONDARY()
+                                                                          : ui::colors::TEXT_DIM()));
             else if (col == "BID")    table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));
             else if (col == "ASK")    table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));
             else if (col == "OPEN")   table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));

@@ -971,40 +971,46 @@ ApiResponse<QVector<BrokerAuction>> AlpacaBroker::get_historical_auctions_single
 // IBKR, TRADIER, SAXOBANK — Bearer token pattern
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Stub implementations for remaining global brokers. Each method returns a
+// structured "<Broker>: <op> not implemented" error so the UI surfaces a
+// useful diagnostic rather than a bare "TODO". Replaced as each broker
+// integration ships.
+#define STUB_NOT_IMPL_MSG(OP) QString("%1: %2 not implemented").arg(name(), QStringLiteral(#OP))
+
 #define IMPL_STUB_METHODS(CLASS)                                                                                       \
     TokenExchangeResponse CLASS::exchange_token(const QString&, const QString&, const QString&) {                      \
-        return {false, "", "", "", "Use OAuth flow"};                                                                  \
+        return {false, "", "", "", QString("%1: use OAuth flow").arg(name())};                                         \
     }                                                                                                                  \
     OrderPlaceResponse CLASS::place_order(const BrokerCredentials&, const UnifiedOrder&) {                             \
-        return {false, "", "TODO"};                                                                                    \
+        return {false, "", STUB_NOT_IMPL_MSG(place_order)};                                                            \
     }                                                                                                                  \
     ApiResponse<QJsonObject> CLASS::modify_order(const BrokerCredentials&, const QString&, const QJsonObject&) {       \
-        return {false, std::nullopt, "TODO", now_ts()};                                                                \
+        return {false, std::nullopt, STUB_NOT_IMPL_MSG(modify_order), now_ts()};                                       \
     }                                                                                                                  \
     ApiResponse<QJsonObject> CLASS::cancel_order(const BrokerCredentials&, const QString&) {                           \
-        return {false, std::nullopt, "TODO", now_ts()};                                                                \
+        return {false, std::nullopt, STUB_NOT_IMPL_MSG(cancel_order), now_ts()};                                       \
     }                                                                                                                  \
     ApiResponse<QVector<BrokerOrderInfo>> CLASS::get_orders(const BrokerCredentials&) {                                \
-        return {false, std::nullopt, "TODO", now_ts()};                                                                \
+        return {false, std::nullopt, STUB_NOT_IMPL_MSG(get_orders), now_ts()};                                         \
     }                                                                                                                  \
     ApiResponse<QJsonObject> CLASS::get_trade_book(const BrokerCredentials&) {                                         \
-        return {false, std::nullopt, "TODO", now_ts()};                                                                \
+        return {false, std::nullopt, STUB_NOT_IMPL_MSG(get_trade_book), now_ts()};                                     \
     }                                                                                                                  \
     ApiResponse<QVector<BrokerPosition>> CLASS::get_positions(const BrokerCredentials&) {                              \
-        return {false, std::nullopt, "TODO", now_ts()};                                                                \
+        return {false, std::nullopt, STUB_NOT_IMPL_MSG(get_positions), now_ts()};                                      \
     }                                                                                                                  \
     ApiResponse<QVector<BrokerHolding>> CLASS::get_holdings(const BrokerCredentials&) {                                \
-        return {false, std::nullopt, "TODO", now_ts()};                                                                \
+        return {false, std::nullopt, STUB_NOT_IMPL_MSG(get_holdings), now_ts()};                                       \
     }                                                                                                                  \
     ApiResponse<BrokerFunds> CLASS::get_funds(const BrokerCredentials&) {                                              \
-        return {false, std::nullopt, "TODO", now_ts()};                                                                \
+        return {false, std::nullopt, STUB_NOT_IMPL_MSG(get_funds), now_ts()};                                          \
     }                                                                                                                  \
     ApiResponse<QVector<BrokerQuote>> CLASS::get_quotes(const BrokerCredentials&, const QVector<QString>&) {           \
-        return {false, std::nullopt, "TODO", now_ts()};                                                                \
+        return {false, std::nullopt, STUB_NOT_IMPL_MSG(get_quotes), now_ts()};                                         \
     }                                                                                                                  \
     ApiResponse<QVector<BrokerCandle>> CLASS::get_history(const BrokerCredentials&, const QString&, const QString&,    \
                                                           const QString&, const QString&) {                            \
-        return {false, std::nullopt, "TODO", now_ts()};                                                                \
+        return {false, std::nullopt, STUB_NOT_IMPL_MSG(get_history), now_ts()};                                        \
     }
 
 // ── IBKR ──
