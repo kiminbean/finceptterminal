@@ -285,7 +285,8 @@ void register_data_format_nodes(NodeRegistry& registry) {
                 bool has_header = params.value("has_header").toBool(true);
 
                 // Split into lines, handling \r\n and \n.
-                QStringList lines = csv_text.split(QRegularExpression(R"(\r?\n)"), Qt::SkipEmptyParts);
+                static const QRegularExpression line_split(R"(\r?\n)");
+                QStringList lines = csv_text.split(line_split, Qt::SkipEmptyParts);
                 if (lines.isEmpty()) {
                     cb(true, QJsonArray{}, {});
                     return;

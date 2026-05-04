@@ -110,7 +110,8 @@ QString AngelOneBroker::lookup_token(const QString& symbol, const QString& excha
         return QString::number(svc_token.value());
 
     // Try stripping -EQ/-BE suffix (AngelOne stores "RELIANCE-EQ" but callers pass "RELIANCE")
-    const QString stripped = symbol.toUpper().remove(QRegularExpression("(-EQ|-BE)$"));
+    static const QRegularExpression suffix_re("(-EQ|-BE)$");
+    const QString stripped = symbol.toUpper().remove(suffix_re);
     if (stripped != symbol.toUpper()) {
         auto svc_token2 = InstrumentService::instance().instrument_token(stripped, exchange, "angelone");
         if (svc_token2.has_value() && svc_token2.value() > 0)
