@@ -28,7 +28,8 @@ namespace fincept::screens {
 static constexpr const char* TAG = "LlmConfigSection";
 
 const QStringList LlmConfigSection::KNOWN_PROVIDERS = {"openai",  "anthropic", "gemini",   "groq",  "deepseek",
-                                                       "openrouter", "minimax", "kimi", "ollama", "xai",   "fincept"};
+                                                       "openrouter", "minimax", "kimi", "ollama", "xai",
+                                                       "zai",   "fincept"};
 
 QString LlmConfigSection::default_base_url(const QString& provider) {
     const QString p = provider.toLower();
@@ -52,6 +53,8 @@ QString LlmConfigSection::default_base_url(const QString& provider) {
         return "http://localhost:11434";
     if (p == "xai")
         return {};
+    if (p == "zai")
+        return "https://api.z.ai/api/coding/paas/v4"; // Z.AI Coding Plan (GLM)
     if (p == "fincept")
         return {}; // endpoints are hardcoded in LlmService, no base_url needed
     return {};
@@ -93,6 +96,8 @@ QStringList LlmConfigSection::fallback_models(const QString& provider) {
         return {"llama3.1:8b", "qwen2.5:7b", "mistral:7b"};
     if (p == "xai")
         return {"grok-4-latest", "grok-4", "grok-3", "grok-3-mini"};
+    if (p == "zai")
+        return {"glm-5.1", "glm-4.6", "glm-4.5", "glm-4.5-air"};
     if (p == "fincept")
         return {"MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed"};
     return {};

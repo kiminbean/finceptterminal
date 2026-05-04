@@ -36,7 +36,7 @@ Result<void> apply_v002(QSqlDatabase& db) {
     // instead, with api_key left blank for the user to fill via Settings → LLM.
     // See fincept-qt/docs/LOCAL_MODE.md.
     sql(db, "INSERT OR IGNORE INTO llm_configs (provider, api_key, base_url, model, is_active) "
-            "VALUES ('zai', '', 'https://api.z.ai/api/coding/paas/v4', 'glm-4.6', 1)");
+            "VALUES ('zai', '', 'https://api.z.ai/api/coding/paas/v4', 'glm-5.1', 1)");
 #else
     // Insert default Fincept LLM
     sql(db, "INSERT OR IGNORE INTO llm_configs (provider, api_key, base_url, model, is_active) "

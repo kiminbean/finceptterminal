@@ -57,7 +57,7 @@ calls that the rest of the app makes will go to the host you configured.
 2. In Fincept Terminal, open **Settings → LLM**.
 3. The provider `zai` will already be present (seeded by the migration).
 4. Paste your key into the `api_key` field and save.
-5. Default model is `glm-4.6`; `glm-4.5` and `glm-4.5-air` are also valid.
+5. Default model is `glm-5.1`; `glm-4.6`, `glm-4.5`, and `glm-4.5-air` are also valid.
 
 The endpoint resolves to `https://api.z.ai/api/coding/paas/v4/chat/completions`.
 The request format is OpenAI-compatible (Bearer auth, `messages` array,

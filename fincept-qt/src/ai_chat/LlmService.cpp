@@ -2217,6 +2217,16 @@ void LlmService::fetch_models(const QString& provider, const QString& api_key, c
                             {"MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M2.5", "MiniMax-M2.5-highspeed"}, {});
         return;
     }
+    // Z.AI Coding Plan does not expose an OpenAI-style /v1/models listing —
+    // calling base + "/v1/models" returns 404. Surface the curated catalog so
+    // Test Connection succeeds and the model dropdown is populated. Real key
+    // validation happens on the first chat completion call.
+    if (provider.toLower() == "zai") {
+        Q_UNUSED(api_key)
+        Q_UNUSED(base_url)
+        emit models_fetched(provider, {"glm-5.1", "glm-4.6", "glm-4.5", "glm-4.5-air"}, {});
+        return;
+    }
 
     QString url = get_models_url(provider, api_key, base_url);
     if (url.isEmpty()) {
