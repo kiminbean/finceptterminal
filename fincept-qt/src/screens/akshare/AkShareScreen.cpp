@@ -714,6 +714,8 @@ void AkShareScreen::execute_query(const QString& script, const QString& endpoint
 // ── Display ─────────────────────────────────────────────────────────────────
 
 void AkShareScreen::display_table_data(const QJsonArray& rows_json) {
+    const bool updates_enabled = data_table_->updatesEnabled();
+    data_table_->setUpdatesEnabled(false);
     data_table_->setSortingEnabled(false);
     data_table_->clear();
     data_table_->setRowCount(0);
@@ -721,6 +723,8 @@ void AkShareScreen::display_table_data(const QJsonArray& rows_json) {
 
     if (rows_json.isEmpty()) {
         data_status_->setText("No data returned");
+        data_table_->setSortingEnabled(true);
+        data_table_->setUpdatesEnabled(updates_enabled);
         return;
     }
 
@@ -773,6 +777,7 @@ void AkShareScreen::display_table_data(const QJsonArray& rows_json) {
         data_table_->resizeColumnsToContents();
     }
     data_table_->setSortingEnabled(true);
+    data_table_->setUpdatesEnabled(updates_enabled);
 
     if (rows_json.size() > max_rows) {
         data_status_->setText(QString("Showing %1 of %2 records").arg(max_rows).arg(rows_json.size()));
@@ -781,7 +786,9 @@ void AkShareScreen::display_table_data(const QJsonArray& rows_json) {
 
 void AkShareScreen::display_json_data(const QJsonArray& rows_json) {
     QJsonDocument doc(rows_json);
-    json_view_->setPlainText(doc.toJson(QJsonDocument::Indented));
+    json_view_->setPlainText(doc.toJson(rows_json.size() > 1000
+                                             ? QJsonDocument::Compact
+                                             : QJsonDocument::Indented));
 }
 
 void AkShareScreen::display_error(const QString& error) {

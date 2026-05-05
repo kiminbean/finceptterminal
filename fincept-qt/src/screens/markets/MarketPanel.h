@@ -61,6 +61,7 @@ class MarketPanel : public QWidget {
     void hub_resubscribe();
     void hub_unsubscribe_all();
     void rebuild_from_cache();
+    void schedule_populate();
 
     MarketPanelConfig              config_;
     QVector<services::QuoteData>   cached_quotes_;  // all fetched data; display subset shown
@@ -71,6 +72,7 @@ class MarketPanel : public QWidget {
     QSet<QString> pending_initial_;  // symbols awaiting first delivery for refresh_finished
     bool refresh_inflight_ = false;
     bool hub_active_ = false;
+    bool populate_pending_ = false;
 
     // Header widgets (28px)
     QWidget*     header_      = nullptr;

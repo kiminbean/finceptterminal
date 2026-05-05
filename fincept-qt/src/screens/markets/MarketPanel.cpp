@@ -332,10 +332,22 @@ void MarketPanel::tick_loading_anim() {
 void MarketPanel::show_data() {
     error_widget_->setVisible(false);
     table_->setVisible(true);
-    // Defer populate until after the splitter has performed layout so body_->height() is valid
+    schedule_populate();
+}
+
+void MarketPanel::schedule_populate() {
+    if (populate_pending_)
+        return;
+    populate_pending_ = true;
+
+    // Defer populate until after the splitter has performed layout so body_->height() is valid.
+    // Multiple quote deliveries in the same event-loop turn are coalesced into one table rebuild.
     QPointer<MarketPanel> self = this;
     QMetaObject::invokeMethod(this, [self]() {
-        if (self) self->populate(self->cached_quotes_);
+        if (!self)
+            return;
+        self->populate_pending_ = false;
+        self->populate(self->cached_quotes_);
     }, Qt::QueuedConnection);
 }
 
@@ -352,6 +364,9 @@ void MarketPanel::populate(const QVector<services::QuoteData>& quotes) {
                             ? (body_h - kColHeaderH) / kRowH
                             : quotes.size();
     const int count   = qMin(quotes.size(), qMax(visible, 0));
+
+    const bool updates_enabled = table_->updatesEnabled();
+    table_->setUpdatesEnabled(false);
     table_->setRowCount(count);
 
     for (int row = 0; row < count; ++row) {
@@ -388,6 +403,7 @@ void MarketPanel::populate(const QVector<services::QuoteData>& quotes) {
             else if (col == "OPEN")   table_->setItem(row, ci, mk("--", ui::colors::TEXT_DIM()));
         }
     }
+    table_->setUpdatesEnabled(updates_enabled);
 }
 
 void MarketPanel::update_visible_rows() {
@@ -415,7 +431,7 @@ QSize MarketPanel::minimumSizeHint() const {
 void MarketPanel::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
     if (has_data_)
-        populate(cached_quotes_);
+        schedule_populate();
     else
         update_visible_rows();
 }

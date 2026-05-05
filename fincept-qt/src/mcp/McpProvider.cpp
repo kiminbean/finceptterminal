@@ -6,11 +6,14 @@
 #include "mcp/SchemaValidator.h"
 
 #include <QCoreApplication>
+#include <QEventLoop>
+#include <QFile>
 #include <QFutureWatcher>
+#include <QJsonArray>
+#include <QMetaObject>
 #include <QPromise>
 #include <QRegularExpression>
 #include <QSet>
-#include <QThread>
 #include <QTimer>
 
 #include <atomic>
@@ -121,13 +124,20 @@ bool McpProvider::has_tool(const QString& name) const {
 // ============================================================================
 
 ToolResult McpProvider::call_tool(const QString& name, const QJsonObject& args) {
-    // Sync entry point. If the registered tool is async, we still want to
-    // give legacy callers (LlmService, TerminalToolBridge, workflow nodes)
-    // a blocking ToolResult — so we dispatch async and wait. The caller is
-    // already on a background thread (every existing call site is) so
-    // blocking here is safe; .result() drains the QFuture.
+    // Sync entry point. If an async handler completes via this thread's event
+    // loop (for example a QTimer in a Qt Test), wait with a local event loop
+    // instead of raw QFuture::waitForFinished(), which would starve queued
+    // completions on the calling thread.
     auto future = call_tool_async(name, args);
-    future.waitForFinished();
+    if (!future.isFinished()) {
+        QFutureWatcher<ToolResult> watcher;
+        QEventLoop loop;
+        QObject::connect(&watcher, &QFutureWatcher<ToolResult>::finished,
+                         &loop, &QEventLoop::quit);
+        watcher.setFuture(future);
+        if (!future.isFinished())
+            loop.exec();
+    }
     if (future.resultCount() == 0)
         return ToolResult::fail("Tool '" + name + "' produced no result");
     return future.result();

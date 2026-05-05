@@ -5,7 +5,7 @@
 # Qt Test executable that links the minimum subset of sources it needs
 # (no linking against the full FinceptTerminal target — keeps tests fast).
 
-find_package(Qt6 ${FINCEPT_QT_VERSION} EXACT REQUIRED COMPONENTS Test)
+find_package(Qt6 ${FINCEPT_QT_VERSION} EXACT REQUIRED COMPONENTS Test Widgets)
 
 enable_testing()
 
@@ -25,6 +25,7 @@ target_include_directories(test_datahub PRIVATE
 target_link_libraries(test_datahub PRIVATE
     Qt6::Core
     Qt6::Test
+    Qt6::Widgets
 )
 
 # Tests shouldn't need the app's unity build settings.

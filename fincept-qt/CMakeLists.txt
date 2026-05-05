@@ -313,6 +313,9 @@ add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
 # -DFINCEPT_BUILD_TESTS=ON to compile the Qt Test executables under
 # fincept-qt/tests/. Run via `ctest` in the build directory.
 option(FINCEPT_BUILD_TESTS "Build the Fincept Terminal test suite" OFF)
+if(FINCEPT_BUILD_TESTS)
+    enable_testing()
+endif()
 
 # ── Qt packages ──────────────────────────────────────────────────────────────
 # Qt is pinned to 6.8.3 across all platforms. Releases must build
@@ -2059,9 +2062,7 @@ if(APPLE AND DEPLOY_QT)
                     "$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/Frameworks/libcrypto.3.dylib"
                 COMMAND codesign --force --sign - --timestamp=none
                     "$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/MacOS/FinceptTerminal"
-                COMMAND codesign --force --sign - --deep --timestamp=none
-                    "$<TARGET_BUNDLE_DIR:FinceptTerminal>"
-                COMMENT "Bundling OpenSSL (libssl/libcrypto) and re-signing app..."
+                COMMENT "Bundling OpenSSL (libssl/libcrypto) and signing dylibs..."
                 VERBATIM
             )
         else()
@@ -2523,6 +2524,16 @@ else()
     else()
         message(WARNING "${FINCEPT_YTDLP_MISSING_MSG}")
     endif()
+endif()
+
+if(APPLE AND DEPLOY_QT)
+    add_custom_command(TARGET FinceptTerminal POST_BUILD
+        COMMAND bash -c "if [ -d \"$<TARGET_FILE_DIR:FinceptTerminal>/scripts\" ]; then find \"$<TARGET_FILE_DIR:FinceptTerminal>/scripts\" -type f -print0 | xargs -0 -n 1 codesign --force --sign - --timestamp=none; fi"
+        COMMAND codesign --force --sign - --deep --timestamp=none
+            "$<TARGET_BUNDLE_DIR:FinceptTerminal>"
+        COMMENT "Final re-signing of complete macOS app bundle..."
+        VERBATIM
+    )
 endif()
 
 # ── Install rules ─────────────────────────────────────────────────────────────

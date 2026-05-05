@@ -179,6 +179,9 @@ class TestDataHub : public QObject {
         // of waiting ~100ms. Restored at end of test.
         const int saved_coalesce = hub.coalesce_window_ms();
         hub.set_coalesce_window_ms(0);
+        TopicPolicy p;
+        p.min_interval_ms = 0;
+        hub.set_policy_pattern("test:flight:*", p);
 
         QObject owner;
         hub.subscribe(&owner, "test:flight:1",
@@ -199,6 +202,7 @@ class TestDataHub : public QObject {
         QTRY_COMPARE(prod.refresh_count, 2);
 
         hub.unregister_producer(&prod);
+        hub.clear_policy_pattern("test:flight:*");
         hub.set_coalesce_window_ms(saved_coalesce);
     }
 
@@ -262,6 +266,65 @@ class TestDataHub : public QObject {
 
         hub.unregister_producer(&prod);
         hub.set_coalesce_window_ms(saved_coalesce);
+    }
+
+    // Pattern fan-out uses the wildcard-prefix index but preserves semantics:
+    // all matching wildcard prefixes plus exact pattern subscriptions receive.
+    void pattern_index_preserves_fanout_semantics() {
+        auto& hub = DataHub::instance();
+        QObject exact_owner;
+        QObject broad_owner;
+        QObject narrow_owner;
+        QObject miss_owner;
+        QStringList seen;
+
+        hub.subscribe_pattern(&exact_owner, "test:index:asset:1",
+            [&](const QString& t, const QVariant& v) { seen.append("exact:" + t + ":" + v.toString()); });
+        hub.subscribe_pattern(&broad_owner, "test:index:*",
+            [&](const QString& t, const QVariant&) { seen.append("broad:" + t); });
+        hub.subscribe_pattern(&narrow_owner, "test:index:asset:*",
+            [&](const QString& t, const QVariant&) { seen.append("narrow:" + t); });
+        hub.subscribe_pattern(&miss_owner, "test:index:other:*",
+            [&](const QString& t, const QVariant&) { seen.append("miss:" + t); });
+
+        hub.publish("test:index:asset:1", QVariant(QString("v")));
+        QCoreApplication::processEvents();
+
+        QVERIFY(seen.contains("exact:test:index:asset:1:v"));
+        QVERIFY(seen.contains("broad:test:index:asset:1"));
+        QVERIFY(seen.contains("narrow:test:index:asset:1"));
+        QVERIFY(!seen.contains("miss:test:index:asset:1"));
+
+        hub.unsubscribe_pattern(&narrow_owner, "test:index:asset:*");
+        seen.clear();
+        hub.publish("test:index:asset:2", QVariant(QString("v2")));
+        QCoreApplication::processEvents();
+        QVERIFY(seen.contains("broad:test:index:asset:2"));
+        QVERIFY(!seen.contains("narrow:test:index:asset:2"));
+    }
+
+    void error_pattern_index_preserves_fanout_semantics() {
+        auto& hub = DataHub::instance();
+        QObject broad_owner;
+        QObject narrow_owner;
+        QStringList seen;
+
+        hub.subscribe_pattern_errors(&broad_owner, "test:err:*",
+            [&](const QString& t, const QString& e) { seen.append("broad:" + t + ":" + e); });
+        hub.subscribe_pattern_errors(&narrow_owner, "test:err:asset:*",
+            [&](const QString& t, const QString& e) { seen.append("narrow:" + t + ":" + e); });
+
+        hub.publish_error("test:err:asset:1", "boom");
+        QCoreApplication::processEvents();
+        QVERIFY(seen.contains("broad:test:err:asset:1:boom"));
+        QVERIFY(seen.contains("narrow:test:err:asset:1:boom"));
+
+        hub.unsubscribe_pattern_errors(&narrow_owner, "test:err:asset:*");
+        seen.clear();
+        hub.publish_error("test:err:asset:2", "boom2");
+        QCoreApplication::processEvents();
+        QVERIFY(seen.contains("broad:test:err:asset:2:boom2"));
+        QVERIFY(!seen.contains("narrow:test:err:asset:2:boom2"));
     }
 
     // peek() returns invalid when value is past TTL; peek_raw() returns anyway.

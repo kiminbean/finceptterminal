@@ -95,10 +95,50 @@ void DataHub::set_coalesce_window_ms(int ms) {
 
 bool DataHub::pattern_matches(const QString& pattern, const QString& topic) {
     // Only `*`-suffix wildcards are supported per DATAHUB_ARCHITECTURE.md §3.1.
-    if (!pattern.endsWith(QLatin1Char('*')))
+    if (!is_wildcard_pattern(pattern))
         return pattern == topic;
     const auto prefix = QStringView{pattern}.left(pattern.size() - 1);
     return topic.size() >= prefix.size() && QStringView{topic}.startsWith(prefix);
+}
+
+bool DataHub::is_wildcard_pattern(const QString& pattern) {
+    return pattern.endsWith(QLatin1Char('*'));
+}
+
+QString DataHub::pattern_prefix(const QString& pattern) {
+    return is_wildcard_pattern(pattern) ? pattern.left(pattern.size() - 1) : pattern;
+}
+
+void DataHub::index_pattern_subscription(const QString& pattern) {
+    // Caller holds mutex_. Only wildcard patterns need the prefix index;
+    // exact patterns are found by direct hash lookup with the topic key.
+    if (is_wildcard_pattern(pattern))
+        pattern_prefix_index_[pattern_prefix(pattern)].insert(pattern);
+}
+
+void DataHub::unindex_pattern_subscription(const QString& pattern) {
+    // Caller holds mutex_. Remove the prefix bucket only after the final
+    // subscription for this wildcard pattern disappears.
+    if (!is_wildcard_pattern(pattern)) return;
+    const QString prefix = pattern_prefix(pattern);
+    auto it = pattern_prefix_index_.find(prefix);
+    if (it == pattern_prefix_index_.end()) return;
+    it.value().remove(pattern);
+    if (it.value().isEmpty()) pattern_prefix_index_.erase(it);
+}
+
+void DataHub::index_error_pattern_subscription(const QString& pattern) {
+    if (is_wildcard_pattern(pattern))
+        error_pattern_prefix_index_[pattern_prefix(pattern)].insert(pattern);
+}
+
+void DataHub::unindex_error_pattern_subscription(const QString& pattern) {
+    if (!is_wildcard_pattern(pattern)) return;
+    const QString prefix = pattern_prefix(pattern);
+    auto it = error_pattern_prefix_index_.find(prefix);
+    if (it == error_pattern_prefix_index_.end()) return;
+    it.value().remove(pattern);
+    if (it.value().isEmpty()) error_pattern_prefix_index_.erase(it);
 }
 
 // ── Policy resolution ──────────────────────────────────────────────────────
@@ -196,7 +236,10 @@ void DataHub::on_owner_destroyed(QObject* owner) {
                 if (bucket == error_pattern_subscriptions_.end()) continue;
                 bucket.value().erase(std::remove_if(bucket.value().begin(), bucket.value().end(),
                     [owner](const ErrorSub& e) { return e.owner.data() == owner; }), bucket.value().end());
-                if (bucket.value().isEmpty()) error_pattern_subscriptions_.erase(bucket);
+                if (bucket.value().isEmpty()) {
+                    error_pattern_subscriptions_.erase(bucket);
+                    unindex_error_pattern_subscription(pattern);
+                }
             }
             error_owner_patterns_.erase(epit);
         }
@@ -232,8 +275,10 @@ void DataHub::on_owner_destroyed(QObject* owner) {
                 vec.erase(std::remove_if(vec.begin(), vec.end(),
                              [owner](const Subscription& s) { return s.owner.data() == owner; }),
                           vec.end());
-                if (vec.isEmpty())
+                if (vec.isEmpty()) {
                     pattern_subscriptions_.erase(sub_it);
+                    unindex_pattern_subscription(pattern);
+                }
             }
             owner_patterns_.erase(pats_it);
         }
@@ -318,9 +363,10 @@ QMetaObject::Connection DataHub::subscribe(
         }
     }
 
-    // Auto-cleanup on owner destruction. The QObject::destroyed signal
-    // fires on the owner's thread — marshal to ours via QueuedConnection
-    // so mutex_ is acquired from the hub thread.
+    // Auto-cleanup on owner destruction. In the common GUI-thread case this
+    // runs immediately during QObject destruction; cross-thread destruction is
+    // marshalled by Qt's AutoConnection. on_owner_destroyed only uses the raw
+    // pointer value as a key and protects hub state with mutex_.
     // Gap 8 fix: bind to the member function (not a fresh lambda) so
     // Qt::UniqueConnection actually deduplicates the connection for
     // owners that re-subscribe repeatedly (show/hide cycles). Lambdas
@@ -329,7 +375,7 @@ QMetaObject::Connection DataHub::subscribe(
     // instead of capturing.
     auto conn = connect(owner, &QObject::destroyed, this,
         &DataHub::on_owner_destroyed,
-        Qt::ConnectionType(Qt::QueuedConnection | Qt::UniqueConnection));
+        Qt::ConnectionType(Qt::AutoConnection | Qt::UniqueConnection));
 
     if (became_active) {
         emit topic_active(topic);
@@ -356,6 +402,7 @@ QMetaObject::Connection DataHub::subscribe_pattern(
         sub.pattern_slot = slot;
         sub.is_pattern = true;
         pattern_subscriptions_[pattern].append(std::move(sub));
+        index_pattern_subscription(pattern);
         owner_patterns_[owner].insert(pattern);
 
         // Cold-start parity with subscribe(): for every already-known topic
@@ -382,7 +429,7 @@ QMetaObject::Connection DataHub::subscribe_pattern(
     // instead of capturing.
     auto conn = connect(owner, &QObject::destroyed, this,
         &DataHub::on_owner_destroyed,
-        Qt::ConnectionType(Qt::QueuedConnection | Qt::UniqueConnection));
+        Qt::ConnectionType(Qt::AutoConnection | Qt::UniqueConnection));
     if (!cold_start_topics.isEmpty())
         request(cold_start_topics, /*force=*/true);
     return conn;
@@ -442,6 +489,7 @@ void DataHub::unsubscribe_pattern(QObject* owner, const QString& pattern) {
                      [owner](const Subscription& s) { return s.owner.data() == owner; }),
                   vec.end());
         if (vec.isEmpty()) pattern_subscriptions_.erase(sub_it);
+        if (vec.isEmpty()) unindex_pattern_subscription(pattern);
     }
     if (auto it = owner_patterns_.find(owner); it != owner_patterns_.end()) {
         it.value().remove(pattern);
@@ -466,7 +514,7 @@ QMetaObject::Connection DataHub::subscribe_errors(
     }
     return connect(owner, &QObject::destroyed, this,
         &DataHub::on_owner_destroyed,
-        Qt::ConnectionType(Qt::QueuedConnection | Qt::UniqueConnection));
+        Qt::ConnectionType(Qt::AutoConnection | Qt::UniqueConnection));
 }
 
 QMetaObject::Connection DataHub::subscribe_pattern_errors(
@@ -480,11 +528,12 @@ QMetaObject::Connection DataHub::subscribe_pattern_errors(
         e.pattern_slot = std::move(slot);
         e.is_pattern = true;
         error_pattern_subscriptions_[pattern].append(std::move(e));
+        index_error_pattern_subscription(pattern);
         error_owner_patterns_[owner].insert(pattern);
     }
     return connect(owner, &QObject::destroyed, this,
         &DataHub::on_owner_destroyed,
-        Qt::ConnectionType(Qt::QueuedConnection | Qt::UniqueConnection));
+        Qt::ConnectionType(Qt::AutoConnection | Qt::UniqueConnection));
 }
 
 void DataHub::unsubscribe_errors(QObject* owner, const QString& topic) {
@@ -509,7 +558,10 @@ void DataHub::unsubscribe_pattern_errors(QObject* owner, const QString& pattern)
         vec.erase(std::remove_if(vec.begin(), vec.end(),
                      [owner](const ErrorSub& e) { return e.owner.data() == owner; }),
                   vec.end());
-        if (vec.isEmpty()) error_pattern_subscriptions_.erase(it);
+        if (vec.isEmpty()) {
+            error_pattern_subscriptions_.erase(it);
+            unindex_error_pattern_subscription(pattern);
+        }
     }
     if (auto it = error_owner_patterns_.find(owner); it != error_owner_patterns_.end()) {
         it.value().remove(pattern);
@@ -549,11 +601,25 @@ void DataHub::emit_to_subscribers(const QString& topic, const QVariant& value) {
             for (const auto& s : it.value())
                 if (s.owner) direct.append({s.owner, s.slot});
         }
-        for (auto it = pattern_subscriptions_.begin();
-             it != pattern_subscriptions_.end(); ++it) {
-            if (!pattern_matches(it.key(), topic)) continue;
+        // Exact pattern subscriptions are direct hash lookups. Wildcard
+        // subscriptions use the prefix index: because wildcard semantics are
+        // suffix-only (`prefix*`), every matching wildcard key must be one of
+        // the topic's prefixes. This turns fan-out from O(pattern_count) into
+        // O(topic_length + matched_patterns).
+        if (auto it = pattern_subscriptions_.find(topic); it != pattern_subscriptions_.end()) {
             for (const auto& s : it.value())
                 if (s.owner) pattern.append({s.owner, s.pattern_slot});
+        }
+        for (int i = 0; i <= topic.size(); ++i) {
+            const QString prefix = topic.left(i);
+            auto idx_it = pattern_prefix_index_.find(prefix);
+            if (idx_it == pattern_prefix_index_.end()) continue;
+            for (const QString& pat : idx_it.value()) {
+                auto sub_it = pattern_subscriptions_.find(pat);
+                if (sub_it == pattern_subscriptions_.end()) continue;
+                for (const auto& s : sub_it.value())
+                    if (s.owner) pattern.append({s.owner, s.pattern_slot});
+            }
         }
     }
 
@@ -697,11 +763,20 @@ void DataHub::publish_error(const QString& topic, const QString& error) {
             for (const auto& e : it.value())
                 if (e.owner) error_targets.append({e.owner, e.single_slot, {}, false});
         }
-        for (auto it = error_pattern_subscriptions_.begin();
-             it != error_pattern_subscriptions_.end(); ++it) {
-            if (!pattern_matches(it.key(), topic)) continue;
+        if (auto it = error_pattern_subscriptions_.find(topic); it != error_pattern_subscriptions_.end()) {
             for (const auto& e : it.value())
                 if (e.owner) error_targets.append({e.owner, {}, e.pattern_slot, true});
+        }
+        for (int i = 0; i <= topic.size(); ++i) {
+            const QString prefix = topic.left(i);
+            auto idx_it = error_pattern_prefix_index_.find(prefix);
+            if (idx_it == error_pattern_prefix_index_.end()) continue;
+            for (const QString& pat : idx_it.value()) {
+                auto sub_it = error_pattern_subscriptions_.find(pat);
+                if (sub_it == error_pattern_subscriptions_.end()) continue;
+                for (const auto& e : sub_it.value())
+                    if (e.owner) error_targets.append({e.owner, {}, e.pattern_slot, true});
+            }
         }
     }
     for (const auto& t : error_targets) {
@@ -1012,8 +1087,10 @@ QVector<TopicStats> DataHub::stats() const {
         s.in_flight = it->in_flight;
         s.push_only = it->policy.push_only;
         s.last_error = it->last_error;
-        if (auto sub_it = subscriptions_.find(it.key()); sub_it != subscriptions_.end())
-            s.subscriber_count = sub_it.value().size();
+        if (auto sub_it = subscriptions_.find(it.key()); sub_it != subscriptions_.end()) {
+            s.subscriber_count = std::count_if(sub_it.value().cbegin(), sub_it.value().cend(),
+                                               [](const Subscription& sub) { return !sub.owner.isNull(); });
+        }
         out.append(std::move(s));
     }
     std::sort(out.begin(), out.end(),

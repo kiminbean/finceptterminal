@@ -52,6 +52,7 @@ class Logger {
     std::atomic<LogLevel> min_level_{LogLevel::Info};
     std::atomic<bool> json_mode_{false};
     std::atomic<bool> degraded_{false}; // set after a write failure so we only warn once
+    std::atomic<bool> has_tag_levels_{false};
 
     QHash<QString, LogLevel> tag_levels_;
     QFile log_file_;

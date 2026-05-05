@@ -264,6 +264,12 @@ class DataHub : public QObject {
     TopicPolicy resolve_policy(const QString& topic) const;
     TopicState& state_for(const QString& topic);
     static bool pattern_matches(const QString& pattern, const QString& topic);
+    static bool is_wildcard_pattern(const QString& pattern);
+    static QString pattern_prefix(const QString& pattern);
+    void index_pattern_subscription(const QString& pattern);
+    void unindex_pattern_subscription(const QString& pattern);
+    void index_error_pattern_subscription(const QString& pattern);
+    void unindex_error_pattern_subscription(const QString& pattern);
     void emit_to_subscribers(const QString& topic, const QVariant& value);
     void do_publish(const QString& topic, const QVariant& value,
                     std::chrono::milliseconds ttl_override);
@@ -277,6 +283,10 @@ class DataHub : public QObject {
     QHash<QString, QVector<Subscription>> subscriptions_;
     // pattern_subscriptions_[pattern] -> vector of wildcard subs
     QHash<QString, QVector<Subscription>> pattern_subscriptions_;
+    // Prefix index for wildcard pattern fan-out. Pattern matching supports only
+    // trailing '*' wildcards, so publish(topic) can enumerate topic prefixes
+    // and avoid scanning every registered pattern on the hot path.
+    QHash<QString, QSet<QString>> pattern_prefix_index_;
     // owner -> set of (topic, is_pattern) so we can fast-unsub on destroy
     QHash<QObject*, QSet<QString>> owner_topics_;
     QHash<QObject*, QSet<QString>> owner_patterns_;
@@ -288,6 +298,7 @@ class DataHub : public QObject {
     // fan-out path inside publish_error().
     QHash<QString, QVector<ErrorSub>> error_subscriptions_;
     QHash<QString, QVector<ErrorSub>> error_pattern_subscriptions_;
+    QHash<QString, QSet<QString>> error_pattern_prefix_index_;
     QHash<QObject*, QSet<QString>> error_owner_topics_;
     QHash<QObject*, QSet<QString>> error_owner_patterns_;
 
