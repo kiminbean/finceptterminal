@@ -11,6 +11,7 @@
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QTimeZone>
 
 namespace fincept::mcp::tools {
 
@@ -240,7 +241,7 @@ std::vector<ToolDef> get_markets_tools() {
             for (const auto& p : points) {
                 bars.append(QJsonObject{
                     {"timestamp", p.timestamp},
-                    {"date", QDateTime::fromSecsSinceEpoch(p.timestamp, Qt::UTC).toString(Qt::ISODate)},
+                    {"date", QDateTime::fromSecsSinceEpoch(p.timestamp, QTimeZone::UTC).toString(Qt::ISODate)},
                     {"open", p.open},
                     {"high", p.high},
                     {"low", p.low},

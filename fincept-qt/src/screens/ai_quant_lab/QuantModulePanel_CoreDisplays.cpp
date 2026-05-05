@@ -52,11 +52,6 @@ using namespace fincept::screens::quant_gs_helpers;
 
 namespace {
 
-QString fmt_int_safe(const QJsonValue& v) {
-    if (v.isNull() || v.isUndefined()) return QStringLiteral("—");
-    return QString::number(v.toInt());
-}
-
 // Returns false if the payload was an error (already displayed via callback).
 bool check_success(const QJsonObject& payload,
                    const std::function<void(const QString&)>& display_error_fn) {
@@ -438,7 +433,6 @@ void QuantModulePanel::display_model_library_result(const QString& command, cons
         if (!metrics.isEmpty()) {
             results_layout_->addWidget(gs_section_header("METRICS", accent));
             QList<QWidget*> metric_cards;
-            int emitted = 0;
             for (auto it = metrics.begin(); it != metrics.end(); ++it) {
                 const double v = it.value().toDouble();
                 QString lbl = it.key().toUpper();
@@ -447,7 +441,6 @@ void QuantModulePanel::display_model_library_result(const QString& command, cons
                 if (metric_cards.size() == 4) {
                     results_layout_->addWidget(gs_card_row(metric_cards, this));
                     metric_cards.clear();
-                    emitted += 4;
                 }
             }
             while (!metric_cards.isEmpty() && metric_cards.size() < 4)

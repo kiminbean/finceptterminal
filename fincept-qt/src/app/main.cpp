@@ -148,9 +148,7 @@ int main(int argc, char* argv[]) {
     // compositing. Falls back to software rasterizer on systems without GL.
     QApplication::setAttribute(Qt::AA_UseDesktopOpenGL);
 
-    // Smooth pixmap scaling for HiDPI (Retina) displays.
-    QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-    QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+    // Qt 6 enables HiDPI scaling and HiDPI pixmaps by default.
 
     // SingleApplication enforces one process per profile.
     // The instance key is scoped to the active profile name, so

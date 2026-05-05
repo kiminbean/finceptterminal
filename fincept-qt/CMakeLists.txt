@@ -479,7 +479,10 @@ FetchContent_Declare(
     GIT_TAG        729e6b8b320caa96328968ab27d7db2235e4fb47  # release-0.5.2
     GIT_SHALLOW    TRUE
 )
+set(_FINCEPT_CMAKE_WARN_DEPRECATED_SAVED ${CMAKE_WARN_DEPRECATED})
+set(CMAKE_WARN_DEPRECATED OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(md4c)
+set(CMAKE_WARN_DEPRECATED ${_FINCEPT_CMAKE_WARN_DEPRECATED_SAVED} CACHE BOOL "" FORCE)
 # md4c builds md4c (parser) and md4c-html (HTML renderer) as static libs.
 # Disable any example/test targets it may expose.
 set_target_properties(md4c PROPERTIES UNITY_BUILD OFF)
@@ -599,6 +602,8 @@ FetchContent_Declare(
     GIT_TAG        87cffe5d40307c61141c88b88c10c5e7d181d880  # 4.5.0
     GIT_SHALLOW    TRUE
     UPDATE_DISCONNECTED TRUE
+    PATCH_COMMAND ${CMAKE_COMMAND} -DFILE=<SOURCE_DIR>/CMakeLists.txt
+                  -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/qtads_suppress_git_describe.cmake"
 )
 FetchContent_MakeAvailable(QtADS)
 # ADS target name is version-stamped: qtadvanceddocking-qt6
@@ -2050,6 +2055,10 @@ if(APPLE AND DEPLOY_QT)
                 COMMAND chmod u+w
                     "$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/Frameworks/libssl.3.dylib"
                     "$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/Frameworks/libcrypto.3.dylib"
+                # Homebrew dylibs may already carry a signature. Remove it before
+                # install_name_tool rewrites ids/dependencies to avoid noisy
+                # "will invalidate the code signature" warnings; we re-sign below.
+                COMMAND bash -c "codesign --remove-signature \"$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/Frameworks/libssl.3.dylib\" 2>/dev/null || true; codesign --remove-signature \"$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/Frameworks/libcrypto.3.dylib\" 2>/dev/null || true"
                 COMMAND install_name_tool -id "@executable_path/../Frameworks/libssl.3.dylib"
                     "$<TARGET_BUNDLE_DIR:FinceptTerminal>/Contents/Frameworks/libssl.3.dylib"
                 COMMAND install_name_tool -id "@executable_path/../Frameworks/libcrypto.3.dylib"
@@ -2259,12 +2268,9 @@ target_link_libraries(FinceptTerminal PRIVATE
     Qt6::Multimedia
     QXlsx::QXlsx
     qgeoview
-    md4c
     md4c-html
     SingleApplication::SingleApplication
     qtadvanceddocking-qt6
-    OpenSSL::SSL
-    OpenSSL::Crypto
     fincept_ed25519
 )
 

@@ -36,6 +36,7 @@ QString fail_msg(const QString& key, const QString& reason) {
 // legacy raw QJsonObject schema fragment. Returns empty string on success,
 // error reason on failure.
 QString validate_typed(const QString& key, const ToolParam& p, const QJsonValue& v) {
+    Q_UNUSED(key);
     if (!type_matches(p.type, v))
         return "expected " + p.type;
 
@@ -63,6 +64,7 @@ QString validate_typed(const QString& key, const ToolParam& p, const QJsonValue&
 }
 
 QString validate_legacy(const QString& key, const QJsonObject& spec, const QJsonValue& v) {
+    Q_UNUSED(key);
     const QString expected = spec["type"].toString();
     if (!expected.isEmpty() && !type_matches(expected, v))
         return "expected " + expected;
