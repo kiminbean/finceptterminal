@@ -11,6 +11,10 @@
 #include <QMetaObject>
 #include <QProcessEnvironment>
 
+#ifndef FINCEPT_VERSION_STRING
+#    define FINCEPT_VERSION_STRING "0.0.0-dev"
+#endif
+
 namespace fincept::mcp {
 
 static constexpr const char* TAG = "McpClient";
@@ -168,7 +172,7 @@ Result<QJsonObject> McpClient::initialize() {
 
     QJsonObject client_info;
     client_info["name"] = "FinceptTerminal";
-    client_info["version"] = "5.0.0";
+    client_info["version"] = QStringLiteral(FINCEPT_VERSION_STRING);
     params["clientInfo"] = client_info;
 
     QJsonObject capabilities;

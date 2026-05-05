@@ -7,6 +7,10 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 
+#ifndef FINCEPT_VERSION_STRING
+#    define FINCEPT_VERSION_STRING "0.0.0-dev"
+#endif
+
 namespace fincept::trading {
 
 static constexpr const char* BASE = "https://openapi.motilaloswal.com";
@@ -118,7 +122,7 @@ QMap<QString, QString> MotilalBroker::auth_headers(const BrokerCredentials& cred
         {"devicemodel", "PC"},
         {"manufacturer", "Generic"},
         {"productname", "FinceptTerminal"},
-        {"productversion", "5.0.0"},
+        {"productversion", QStringLiteral(FINCEPT_VERSION_STRING)},
         {"browsername", "Chrome"},
         {"browserversion", "120.0"},
     };
@@ -161,7 +165,7 @@ TokenExchangeResponse MotilalBroker::exchange_token(const QString& api_key, cons
         {"devicemodel", "PC"},
         {"manufacturer", "Generic"},
         {"productname", "FinceptTerminal"},
-        {"productversion", "5.0.0"},
+        {"productversion", QStringLiteral(FINCEPT_VERSION_STRING)},
         {"browsername", "Chrome"},
         {"browserversion", "120.0"},
     };

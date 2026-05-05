@@ -23,7 +23,7 @@ if(WIN32 AND CMAKE_HOST_WIN32)
     endif()
 endif()
 
-project(FinceptTerminal VERSION 5.0.0 LANGUAGES C CXX)
+project(FinceptTerminal VERSION 5.0.1 LANGUAGES C CXX)
 
 # ── Local-only mode (bypass api.fincept.in auth + synthetic ENTERPRISE) ──────
 # Enable with:  cmake -B build/macos-release -DFINCEPT_LOCAL_MODE=ON ...
